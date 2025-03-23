@@ -1,8 +1,8 @@
-use super::{ConversationPlatform, error::Error};
 use crate::{
     application::{config::AppConfigPlatformMastodon, constants::USER_AGENT},
     assistant::Assistant,
     model::message::Message,
+    platform::{ConversationPlatform, error::Error},
 };
 
 use std::sync::{Arc, LazyLock};
@@ -72,7 +72,7 @@ impl MastodonPlatform {
         }))
     }
 
-    async fn process_event(self: Arc<Self>, event: Event) -> Result<(), Error> {
+    async fn process_event(self: Arc<MastodonPlatform>, event: Event) -> Result<(), Error> {
         match event {
             Event::Update(status) => self.process_status(status).await,
             Event::Notification(notification) => match notification.notification_type {
@@ -88,7 +88,7 @@ impl MastodonPlatform {
         }
     }
 
-    async fn process_status(self: Arc<Self>, status: Status) -> Result<(), Error> {
+    async fn process_status(self: Arc<MastodonPlatform>, status: Status) -> Result<(), Error> {
         // フィルタリング(bot flag と自分には応答しない)
         if status.account.bot || status.account.id == self.self_account.id {
             return Ok(());

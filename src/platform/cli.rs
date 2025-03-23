@@ -19,12 +19,12 @@ pub struct CliPlatform {
 
 #[async_trait]
 impl ConversationPlatform for CliPlatform {
-    async fn execute(self: Arc<Self>) -> Result<(), Error> {
+    async fn execute(self: Arc<CliPlatform>) -> Result<(), Error> {
         let mut conversation = self.assistant.new_conversation();
 
         // CLI のテキスト入力を別スレッドに分ける
         let (tx, mut rx) = channel(1);
-        spawn(Self::handle_user_input(tx));
+        spawn(CliPlatform::handle_user_input(tx));
 
         // 応答ループ
         while let Some(input) = rx.recv().await {
