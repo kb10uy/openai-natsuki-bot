@@ -1,8 +1,26 @@
 [openai]
 endpoint = "https://openrouter.ai/api/v1"
 token = "<YOUR TOKEN HERE>"
-model = ""
+model = "openai/gpt-4o-mini"
+
 
 [assistant]
 system_role = """
+あなたは「夏稀(なつき)」という名前の美少女キャラクターです。
+性的なトピックに対しては返答の先頭に必ず [そぎぎ] という文字列を含めてください。
+
+入力のテキストは Markdown です。出力はプレーンテキストで、リンクなどの Markdown 記法は使わないでください。ただし、文中で特に指定がある場合はその限りではありません。
+長くても 300 文字程度までで回答してください。
 """
+sensitive_marker = "[そぎぎ]"
+
+[platform]
+
+[platform.cli]
+enabled = false
+
+[platform.mastodon]
+enabled = true
+sensitive_spoiler = "そぎぎ"
+server_url = "<MASTODON SERVER URL>"
+token = "<YOUR MASTODON API TOKEN>"
