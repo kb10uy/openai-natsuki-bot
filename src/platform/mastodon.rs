@@ -27,6 +27,8 @@ pub struct MastodonPlatform<B> {
     chat: ChatInterface<B>,
     mastodon: Mastodon,
     self_account: Account,
+    sensitive_marker: String,
+    sensitive_spoiler: String,
 }
 
 impl<B: ChatBackend> ConversationPlatform<B> for MastodonPlatform<B> {
@@ -47,6 +49,7 @@ impl<B: ChatBackend> ConversationPlatform<B> for MastodonPlatform<B> {
 impl<B: ChatBackend> MastodonPlatform<B> {
     pub async fn new(
         config_mastodon: &AppConfigPlatformMastodon,
+        sensitive_marker: impl Into<String>, // TODO: ここにあるべきではない
         chat_interface: &ChatInterface<B>,
     ) -> Result<Arc<Self>, Error> {
         let http_client = reqwest::ClientBuilder::new()
@@ -67,6 +70,8 @@ impl<B: ChatBackend> MastodonPlatform<B> {
             chat: chat_interface.clone(),
             mastodon,
             self_account,
+            sensitive_marker: sensitive_marker.into(),
+            sensitive_spoiler: config_mastodon.sensitive_spoiler.clone(),
         }))
     }
 
@@ -105,18 +110,29 @@ impl<B: ChatBackend> MastodonPlatform<B> {
         let Some(update_text) = update.text else {
             return Ok(());
         };
+        let (replying_text, is_sensitive) = match update_text.strip_prefix(&self.sensitive_marker) {
+            Some(without_marker) => (without_marker, true),
+            None => (&update_text[..], false),
+        };
+        info!("夏稀[{}]: {:?}", is_sensitive, replying_text);
 
-        // リプライ
-        info!("夏稀: {:?}", update_text);
-        let reply_text = format!("@{} {update_text}", status.account.acct);
+        // リプライ構築
+        // 公開範囲は最大 unlisted でリプライ元に合わせる
+        // CW はリプライ元があったらそのまま、ないときは要そぎぎなら付与
+        let reply_text = format!("@{} {replying_text}", status.account.acct);
         let reply_visibility = match status.visibility {
             Visibility::Public => Visibility::Unlisted,
             otherwise => otherwise,
+        };
+        let reply_spoiler = match &status.spoiler_text[..] {
+            "" => is_sensitive.then(|| self.sensitive_spoiler.clone()),
+            _ => Some(status.spoiler_text),
         };
         let reply_status = NewStatus {
             status: Some(reply_text),
             visibility: Some(reply_visibility),
             in_reply_to_id: Some(status.id.to_string()),
+            spoiler_text: reply_spoiler,
             ..Default::default()
         };
         self.mastodon.new_status(reply_status).await?;

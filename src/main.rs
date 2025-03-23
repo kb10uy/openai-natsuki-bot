@@ -36,8 +36,12 @@ async fn main() -> Result<()> {
     // Mastodon
     if config.platform.mastodon.enabled {
         info!("starting Mastodon platform");
-        let mastodon_platform =
-            MastodonPlatform::new(&config.platform.mastodon, &chat_interface).await?;
+        let mastodon_platform = MastodonPlatform::new(
+            &config.platform.mastodon,
+            &config.assistant.sensitive_marker,
+            &chat_interface,
+        )
+        .await?;
         let mastodon_task = spawn(mastodon_platform.execute());
         platform_tasks.push(mastodon_task);
     }

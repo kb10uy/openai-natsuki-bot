@@ -29,6 +29,7 @@ pub struct AppConfigOpenai {
 #[derive(Debug, Clone, Deserialize)]
 pub struct AppConfigAssistant {
     pub system_role: String,
+    pub sensitive_marker: String,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -50,4 +51,5 @@ pub struct AppConfigPlatformMastodon {
     pub enabled: bool,
     pub server_url: String,
     pub token: String,
+    pub sensitive_spoiler: String,
 }
