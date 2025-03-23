@@ -4,7 +4,10 @@ pub mod mastodon;
 
 use std::sync::Arc;
 
-pub trait ConversationPlatform<B> {
+use async_trait::async_trait;
+
+#[async_trait]
+pub trait ConversationPlatform {
     /// このプラットフォームに対して処理を開始する。
     async fn execute(self: Arc<Self>) -> Result<(), error::Error>;
 }

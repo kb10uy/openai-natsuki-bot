@@ -1,12 +1,13 @@
 use super::{ConversationPlatform, error::Error};
 use crate::{
     application::{config::AppConfigPlatformMastodon, constants::USER_AGENT},
-    chat::{ChatBackend, ChatInterface},
+    assistant::Assistant,
     model::message::Message,
 };
 
 use std::sync::{Arc, LazyLock};
 
+use async_trait::async_trait;
 use futures::prelude::*;
 use html2md::parse_html;
 use mastodon_async::{
@@ -23,16 +24,16 @@ static RE_HEAD_MENTION: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r#"^\s*\[@.+?\]\(.+?\)\s*"#).expect("invalid regex"));
 
 #[derive(Debug, Clone)]
-pub struct MastodonPlatform<B> {
-    chat: ChatInterface<B>,
+pub struct MastodonPlatform {
+    assistant: Arc<Assistant>,
     mastodon: Mastodon,
     self_account: Account,
-    sensitive_marker: String,
     sensitive_spoiler: String,
 }
 
-impl<B: ChatBackend> ConversationPlatform<B> for MastodonPlatform<B> {
-    async fn execute(self: Arc<Self>) -> Result<(), Error> {
+#[async_trait]
+impl ConversationPlatform for MastodonPlatform {
+    async fn execute(self: Arc<MastodonPlatform>) -> Result<(), Error> {
         let user_stream = self.mastodon.stream_user().await?;
         user_stream
             .map_err(Error::Mastodon)
@@ -46,31 +47,27 @@ impl<B: ChatBackend> ConversationPlatform<B> for MastodonPlatform<B> {
     }
 }
 
-impl<B: ChatBackend> MastodonPlatform<B> {
+impl MastodonPlatform {
     pub async fn new(
         config_mastodon: &AppConfigPlatformMastodon,
-        sensitive_marker: impl Into<String>, // TODO: ここにあるべきではない
-        chat_interface: &ChatInterface<B>,
-    ) -> Result<Arc<Self>, Error> {
+        assistant: Arc<Assistant>,
+    ) -> Result<Arc<MastodonPlatform>, Error> {
+        // Mastodon クライアントと自己アカウント情報
         let http_client = reqwest::ClientBuilder::new()
             .user_agent(USER_AGENT)
             .build()?;
-        let mastodon = Mastodon::new(
-            http_client,
-            mastodon_async::Data {
-                base: config_mastodon.server_url.clone().into(),
-                token: config_mastodon.token.clone().into(),
-                ..Default::default()
-            },
-        );
-
+        let mastodon_data = mastodon_async::Data {
+            base: config_mastodon.server_url.clone().into(),
+            token: config_mastodon.token.clone().into(),
+            ..Default::default()
+        };
+        let mastodon = Mastodon::new(http_client, mastodon_data);
         let self_account = mastodon.verify_credentials().await?;
 
         Ok(Arc::new(MastodonPlatform {
-            chat: chat_interface.clone(),
+            assistant,
             mastodon,
             self_account,
-            sensitive_marker: sensitive_marker.into(),
             sensitive_spoiler: config_mastodon.sensitive_spoiler.clone(),
         }))
     }
@@ -103,29 +100,28 @@ impl<B: ChatBackend> MastodonPlatform<B> {
         info!("[{}] {}: {:?}", status.id, status.account.acct, stripped);
 
         // 呼出
-        let mut conversation = self.chat.create_conversation();
+        let mut conversation = self.assistant.new_conversation();
         conversation.push_message(Message::new_user(stripped));
 
-        let update = self.chat.send(&conversation).await?;
-        let Some(update_text) = update.text else {
-            return Ok(());
-        };
-        let (replying_text, is_sensitive) = match update_text.strip_prefix(&self.sensitive_marker) {
-            Some(without_marker) => (without_marker, true),
-            None => (&update_text[..], false),
-        };
-        info!("夏稀[{}]: {:?}", is_sensitive, replying_text);
+        let update = self.assistant.process_conversation(&conversation).await?;
+        let assistant_response = update.assistant_response;
+        info!(
+            "夏稀[{}]: {:?}",
+            assistant_response.is_sensitive, assistant_response.text
+        );
 
         // リプライ構築
         // 公開範囲は最大 unlisted でリプライ元に合わせる
         // CW はリプライ元があったらそのまま、ないときは要そぎぎなら付与
-        let reply_text = format!("@{} {replying_text}", status.account.acct);
+        let reply_text = format!("@{} {}", status.account.acct, assistant_response.text);
         let reply_visibility = match status.visibility {
             Visibility::Public => Visibility::Unlisted,
             otherwise => otherwise,
         };
         let reply_spoiler = match &status.spoiler_text[..] {
-            "" => is_sensitive.then(|| self.sensitive_spoiler.clone()),
+            "" => assistant_response
+                .is_sensitive
+                .then(|| self.sensitive_spoiler.clone()),
             _ => Some(status.spoiler_text),
         };
         let reply_status = NewStatus {

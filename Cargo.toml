@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 anyhow = "1.0.97"
 async-openai = "0.28.0"
+async-trait = "0.1.88"
 clap = { version = "4.5.32", features = ["derive"] }
 colored = "3.0.0"
 futures = "0.3.31"
@@ -25,5 +26,4 @@ tokio-stream = "0.1.17"
 toml = "0.8.20"
 tracing = "0.1.41"
 tracing-subscriber = "0.3.19"
-trait-variant = "0.1.2"
 uuid = { version = "1.16.0", features = ["serde", "v7"] }

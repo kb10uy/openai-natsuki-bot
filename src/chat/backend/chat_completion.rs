@@ -1,3 +1,9 @@
+use crate::{
+    application::{config::AppConfigOpenai, constants::USER_AGENT},
+    chat::{ChatUpdate, backend::Backend, error::Error},
+    model::{conversation::Conversation, message::Message},
+};
+
 use async_openai::{
     Client,
     config::OpenAIConfig,
@@ -6,35 +12,27 @@ use async_openai::{
         CreateChatCompletionRequest,
     },
 };
-
-use super::{ChatBackend, ConversationUpdate, error::Error};
-use crate::{
-    application::{
-        config::{AppConfig, AppConfigOpenai},
-        constants::USER_AGENT,
-    },
-    model::{conversation::Conversation, message::Message},
-};
+use async_trait::async_trait;
 
 /// OpenAI の Chat Completion API を利用したバックエンド。
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct ChatCompletionBackend {
     client: Client<OpenAIConfig>,
     model: String,
 }
 
-impl ChatBackend for ChatCompletionBackend {
-    async fn create(config: &AppConfig) -> Result<Self, Error> {
-        let client = create_openai_client(&config.openai).await?;
-        let model = config.openai.model.clone();
+impl ChatCompletionBackend {
+    pub async fn new(openai_config: &AppConfigOpenai) -> Result<ChatCompletionBackend, Error> {
+        let client = create_openai_client(openai_config).await?;
+        let model = openai_config.model.clone();
 
         Ok(ChatCompletionBackend { client, model })
     }
+}
 
-    async fn send_conversation(
-        &self,
-        conversation: &Conversation,
-    ) -> Result<ConversationUpdate, Error> {
+#[async_trait]
+impl Backend for ChatCompletionBackend {
+    async fn send_conversation(&self, conversation: &Conversation) -> Result<ChatUpdate, Error> {
         let messages = conversation
             .messages()
             .iter()
@@ -51,7 +49,7 @@ impl ChatBackend for ChatCompletionBackend {
             return Err(Error::NoChoice);
         };
 
-        let update = ConversationUpdate {
+        let update = ChatUpdate {
             text: first_choice.message.content.clone(),
         };
         Ok(update)
@@ -87,7 +85,7 @@ fn transform_message(message: &Message) -> ChatCompletionRequestMessage {
             })
         }
         Message::Assistant(assistant_message) => {
-            ChatCompletionRequestMessage::Assistant(assistant_message.0.clone().into())
+            ChatCompletionRequestMessage::Assistant(assistant_message.text.clone().into())
         }
     }
 }

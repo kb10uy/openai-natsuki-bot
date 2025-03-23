@@ -1,11 +1,9 @@
 use super::{ConversationPlatform, error::Error};
-use crate::{
-    chat::{ChatBackend, ChatInterface},
-    model::message::Message,
-};
+use crate::{assistant::Assistant, model::message::Message};
 
 use std::{io::stdin, sync::Arc};
 
+use async_trait::async_trait;
 use colored::Colorize;
 use thiserror::Error as ThisError;
 use tokio::{
@@ -14,14 +12,15 @@ use tokio::{
 };
 use tracing::{debug, info};
 
-#[derive(Debug, Clone)]
-pub struct CliPlatform<B> {
-    chat: ChatInterface<B>,
+#[derive(Debug)]
+pub struct CliPlatform {
+    assistant: Arc<Assistant>,
 }
 
-impl<B: ChatBackend> ConversationPlatform<B> for CliPlatform<B> {
+#[async_trait]
+impl ConversationPlatform for CliPlatform {
     async fn execute(self: Arc<Self>) -> Result<(), Error> {
-        let mut conversation = self.chat.create_conversation();
+        let mut conversation = self.assistant.new_conversation();
 
         // CLI のテキスト入力を別スレッドに分ける
         let (tx, mut rx) = channel(1);
@@ -31,12 +30,12 @@ impl<B: ChatBackend> ConversationPlatform<B> for CliPlatform<B> {
         while let Some(input) = rx.recv().await {
             info!("sending {input}");
             conversation.push_message(Message::new_user(input));
-            let update = self.chat.send(&conversation).await?;
-
-            if let Some(assistant_text) = update.text {
-                println!(">> {}", assistant_text.bold().white());
-                conversation.push_message(Message::new_assistant(assistant_text));
-            }
+            let conversation_update = self.assistant.process_conversation(&conversation).await?;
+            println!(
+                ">> {}",
+                conversation_update.assistant_response.text.bold().white()
+            );
+            conversation.push_message(conversation_update.assistant_response.into());
         }
         println!("channel closed");
 
@@ -44,11 +43,9 @@ impl<B: ChatBackend> ConversationPlatform<B> for CliPlatform<B> {
     }
 }
 
-impl<B: ChatBackend> CliPlatform<B> {
-    pub fn new(chat_interface: &ChatInterface<B>) -> Arc<Self> {
-        Arc::new(CliPlatform {
-            chat: chat_interface.clone(),
-        })
+impl CliPlatform {
+    pub fn new(assistant: Arc<Assistant>) -> Arc<CliPlatform> {
+        Arc::new(CliPlatform { assistant })
     }
 
     /// stdin の行を Sender に流す。

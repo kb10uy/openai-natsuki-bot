@@ -2,11 +2,11 @@ use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]
 pub enum Error {
-    #[error("chat interface error: {0}")]
-    Chat(
+    #[error("assistant error: {0}")]
+    Assistant(
         #[source]
         #[from]
-        crate::chat::error::Error,
+        crate::assistant::error::Error,
     ),
 
     #[error("HTTP error: {0}")]
@@ -23,6 +23,7 @@ pub enum Error {
         mastodon_async::Error,
     ),
 
+    /// 前提条件の不整合が発生した。
     #[error("requirement(s) not met: {0}")]
     ExpectationMismatch(String),
 }

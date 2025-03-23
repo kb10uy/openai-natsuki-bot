@@ -1,11 +1,13 @@
 mod application;
+mod assistant;
 mod chat;
 mod model;
 mod platform;
 
 use crate::{
     application::{cli::Arguments, config::load_config},
-    chat::{ChatInterface, chat_completion::ChatCompletionBackend},
+    assistant::Assistant,
+    chat::{ChatInterface, backend::ChatCompletionBackend},
     platform::{ConversationPlatform, cli::CliPlatform, mastodon::MastodonPlatform},
 };
 
@@ -21,14 +23,16 @@ async fn main() -> Result<()> {
     let args = Arguments::parse();
     let config = load_config(args.config).await?;
 
-    let chat_interface = ChatInterface::<ChatCompletionBackend>::new(&config).await?;
+    let backend = ChatCompletionBackend::new(&config.openai).await?;
+    let chat_interface = ChatInterface::new(backend).await?;
+    let assistant = Assistant::new(&config.assistant, chat_interface);
 
     let mut platform_tasks = vec![];
 
     // CLI
     if config.platform.cli.enabled {
         info!("starting CLI platform");
-        let cli_platform = CliPlatform::new(&chat_interface);
+        let cli_platform = CliPlatform::new(assistant.clone());
         let cli_task = spawn(cli_platform.execute());
         platform_tasks.push(cli_task);
     }
@@ -36,12 +40,8 @@ async fn main() -> Result<()> {
     // Mastodon
     if config.platform.mastodon.enabled {
         info!("starting Mastodon platform");
-        let mastodon_platform = MastodonPlatform::new(
-            &config.platform.mastodon,
-            &config.assistant.sensitive_marker,
-            &chat_interface,
-        )
-        .await?;
+        let mastodon_platform =
+            MastodonPlatform::new(&config.platform.mastodon, assistant.clone()).await?;
         let mastodon_task = spawn(mastodon_platform.execute());
         platform_tasks.push(mastodon_task);
     }

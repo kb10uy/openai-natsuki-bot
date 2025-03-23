@@ -16,6 +16,7 @@ pub enum Error {
         async_openai::error::OpenAIError,
     ),
 
+    /// OpenAI API が有効なレスポンスを生成しなかった。
     #[error("OpenAI API returns no choice to show")]
     NoChoice,
 }
