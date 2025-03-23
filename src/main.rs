@@ -1,30 +1,25 @@
-mod cli;
-mod config;
+mod application;
+mod chat_interface;
+mod model;
 
 use crate::{
-    cli::Arguments,
-    config::{AppConfigOpenai, load_config},
+    application::{cli::Arguments, config::load_config},
+    chat_interface::ChatInterface,
 };
 
 use anyhow::{Context, Result};
-use async_openai::{
-    Client,
-    config::OpenAIConfig,
-    types::{
-        ChatCompletionRequestMessage as Ccrm, ChatCompletionRequestSystemMessage as CcrmSystem,
-        ChatCompletionRequestUserMessage as CcrmUser, CreateChatCompletionRequest,
-    },
+use async_openai::types::{
+    ChatCompletionRequestMessage as Ccrm, ChatCompletionRequestSystemMessage as CcrmSystem,
+    ChatCompletionRequestUserMessage as CcrmUser, CreateChatCompletionRequest,
 };
 use clap::Parser;
-
-const USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
 
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
     let args = Arguments::parse();
     let config = load_config(args.config).await?;
-    let openai_client = create_openai_client(&config.openai).await?;
+    let chat_interface = ChatInterface::new(&config).await?;
 
     let messages = vec![
         Ccrm::System(CcrmSystem {
@@ -56,16 +51,4 @@ async fn main() -> Result<()> {
     println!("{message_text}");
 
     Ok(())
-}
-
-async fn create_openai_client(openai_config: &AppConfigOpenai) -> Result<Client<OpenAIConfig>> {
-    let config = OpenAIConfig::new()
-        .with_api_key(&openai_config.token)
-        .with_api_base(&openai_config.endpoint);
-    let http_client = reqwest::ClientBuilder::new()
-        .user_agent(USER_AGENT)
-        .build()?;
-
-    let client = Client::with_config(config).with_http_client(http_client);
-    Ok(client)
 }
