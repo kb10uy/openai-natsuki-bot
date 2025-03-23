@@ -42,9 +42,11 @@ impl<B: ChatBackend> ChatInterface<B> {
     }
 }
 
-pub trait ChatBackend
+#[trait_variant::make(ChatBackend: Send)]
+#[allow(dead_code)]
+pub trait LocalChatBackend
 where
-    Self: 'static + Debug + Clone + Sized,
+    Self: 'static + Sized + Send + Sync + Debug + Clone,
 {
     /// 初期化する。
     async fn create(config: &AppConfig) -> Result<Self, error::Error>;

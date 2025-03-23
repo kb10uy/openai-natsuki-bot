@@ -22,4 +22,7 @@ pub enum Error {
         #[from]
         mastodon_async::Error,
     ),
+
+    #[error("requirement(s) not met: {0}")]
+    ExpectationMismatch(String),
 }

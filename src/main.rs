@@ -13,6 +13,7 @@ use anyhow::Result;
 use clap::Parser;
 use futures::future::join_all;
 use tokio::spawn;
+use tracing::info;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -26,6 +27,7 @@ async fn main() -> Result<()> {
 
     // CLI
     if config.platform.cli.enabled {
+        info!("starting CLI platform");
         let cli_platform = CliPlatform::new(&chat_interface);
         let cli_task = spawn(cli_platform.execute());
         platform_tasks.push(cli_task);
@@ -33,7 +35,9 @@ async fn main() -> Result<()> {
 
     // Mastodon
     if config.platform.mastodon.enabled {
-        let mastodon_platform = MastodonPlatform::new(&config.platform.mastodon, &chat_interface)?;
+        info!("starting Mastodon platform");
+        let mastodon_platform =
+            MastodonPlatform::new(&config.platform.mastodon, &chat_interface).await?;
         let mastodon_task = spawn(mastodon_platform.execute());
         platform_tasks.push(mastodon_task);
     }
