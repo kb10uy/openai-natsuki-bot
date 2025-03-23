@@ -1,7 +1,8 @@
-use crate::chat::ChatInterface;
-
 pub mod cli;
 pub mod error;
+pub mod mastodon;
+
+use crate::chat::ChatInterface;
 
 pub trait ConversationPlatform<B> {
     /// このプラットフォームインターフェースを作成する。
