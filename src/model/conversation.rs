@@ -29,4 +29,12 @@ impl Conversation {
     pub fn push_message(&mut self, message: Message) {
         self.messages.push(message);
     }
+
+    /// 先頭から `taking_messages` の数だけ `messages` を複製した `Conversation` を作成する。
+    pub fn create_branch_now(&self, taking_messages: usize) -> Conversation {
+        Conversation {
+            id: Uuid::now_v7(),
+            messages: self.messages[..taking_messages].to_vec(),
+        }
+    }
 }

@@ -1,11 +1,14 @@
 use crate::{
     application::{config::AppConfigPlatformMastodon, constants::USER_AGENT},
     assistant::Assistant,
-    model::message::Message,
+    model::{conversation::Conversation, message::Message},
     platform::{ConversationPlatform, error::Error},
 };
 
-use std::sync::{Arc, LazyLock};
+use std::{
+    collections::HashMap,
+    sync::{Arc, LazyLock},
+};
 
 use async_trait::async_trait;
 use futures::prelude::*;
@@ -17,18 +20,22 @@ use mastodon_async::{
     },
 };
 use regex::Regex;
-use tokio::spawn;
+use tokio::{spawn, sync::Mutex};
 use tracing::info;
 
 static RE_HEAD_MENTION: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r#"^\s*\[@.+?\]\(.+?\)\s*"#).expect("invalid regex"));
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct MastodonPlatform {
     assistant: Arc<Assistant>,
     mastodon: Mastodon,
     self_account: Account,
     sensitive_spoiler: String,
+
+    // Arc<Mutex<Conversation>> そんなわけなくない？
+    /// Mastodon 側のツリー最後の in_reply_to StatudId と Conversation の組
+    history: Mutex<HashMap<String, Arc<Mutex<Conversation>>>>,
 }
 
 #[async_trait]
@@ -69,6 +76,8 @@ impl MastodonPlatform {
             mastodon,
             self_account,
             sensitive_spoiler: config_mastodon.sensitive_spoiler.clone(),
+
+            history: Mutex::new(HashMap::new()),
         }))
     }
 
@@ -99,11 +108,32 @@ impl MastodonPlatform {
         let stripped = RE_HEAD_MENTION.replace_all(&content_markdown, "");
         info!("[{}] {}: {:?}", status.id, status.account.acct, stripped);
 
-        // 呼出
-        let mut conversation = self.assistant.new_conversation();
-        conversation.push_message(Message::new_user(stripped));
+        // Conversation の検索
+        let mut locked_history = self.history.lock().await;
+        let in_reply_to_id_str = status.in_reply_to_id.map(|si| si.to_string());
+        let (old_history_id, conversation) = match in_reply_to_id_str {
+            Some(id) if locked_history.contains_key(&id) => {
+                info!("found conversation with last status ID {id}");
+                let conversation = locked_history[&id].clone();
+                (Some(id), conversation)
+            }
+            _ => {
+                info!("creating new conversation");
+                (
+                    None,
+                    Arc::new(Mutex::new(self.assistant.new_conversation())),
+                )
+            }
+        };
 
-        let update = self.assistant.process_conversation(&conversation).await?;
+        // Conversation の更新・呼出し
+        let mut locked_conversation = conversation.lock().await;
+        locked_conversation.push_message(Message::new_user(stripped));
+
+        let update = self
+            .assistant
+            .process_conversation(&locked_conversation)
+            .await?;
         let assistant_response = update.assistant_response;
         info!(
             "夏稀[{}]: {:?}",
@@ -131,7 +161,17 @@ impl MastodonPlatform {
             spoiler_text: reply_spoiler,
             ..Default::default()
         };
-        self.mastodon.new_status(reply_status).await?;
+        let replied_status = self.mastodon.new_status(reply_status).await?;
+
+        // Conversation/history の更新
+        locked_conversation.push_message(assistant_response.into());
+        drop(locked_conversation);
+
+        if let Some(id) = old_history_id {
+            locked_history.remove(&id);
+        }
+        let new_history_id = replied_status.id.to_string();
+        locked_history.insert(new_history_id, conversation);
 
         Ok(())
     }
