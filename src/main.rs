@@ -1,54 +1,28 @@
 mod application;
-mod chat_interface;
+mod chat;
 mod model;
+mod platform;
 
 use crate::{
     application::{cli::Arguments, config::load_config},
-    chat_interface::ChatInterface,
+    chat::{ChatInterface, chat_completion::ChatCompletionBackend},
+    platform::{ConversationPlatform, cli::CliPlatform},
 };
 
-use anyhow::{Context, Result};
-use async_openai::types::{
-    ChatCompletionRequestMessage as Ccrm, ChatCompletionRequestSystemMessage as CcrmSystem,
-    ChatCompletionRequestUserMessage as CcrmUser, CreateChatCompletionRequest,
-};
+use anyhow::Result;
 use clap::Parser;
+use tokio::spawn;
 
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
     let args = Arguments::parse();
     let config = load_config(args.config).await?;
-    let chat_interface = ChatInterface::new(&config).await?;
+    let chat_interface = ChatInterface::<ChatCompletionBackend>::new(&config).await?;
 
-    let messages = vec![
-        Ccrm::System(CcrmSystem {
-            name: None,
-            content: config.assistant.system_role.clone().into(),
-        }),
-        Ccrm::User(CcrmUser {
-            name: None,
-            content: args.prompt.into(),
-        }),
-    ];
-    let request = CreateChatCompletionRequest {
-        messages,
-        model: config.openai.model.clone(),
-        ..Default::default()
-    };
+    let cli_platform = CliPlatform::create(&chat_interface);
 
-    let response = openai_client
-        .chat()
-        .create(request)
-        .await
-        .context("cannot call API")?;
-    let first_choice = response.choices.first().context("cannot fetch response")?;
-    let message_text = first_choice
-        .message
-        .content
-        .as_deref()
-        .expect("no message found");
-    println!("{message_text}");
-
+    // join 自体の成功と ConversationPlatform の成功が必要
+    spawn(cli_platform.execute()).await??;
     Ok(())
 }

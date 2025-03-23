@@ -18,8 +18,8 @@ impl Message {
         Message::User(UserMessage(text.into()))
     }
 
-    pub fn new_function(text: impl Into<String>) -> Message {
-        Message::Function(FunctionMessage(text.into()))
+    pub fn new_function(function_name: impl Into<String>, text: impl Into<String>) -> Message {
+        Message::Function(FunctionMessage(function_name.into(), text.into()))
     }
 
     pub fn new_assistant(text: impl Into<String>) -> Message {
@@ -34,7 +34,7 @@ pub struct UserMessage(pub String);
 pub struct SystemMessage(pub String);
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct FunctionMessage(pub String);
+pub struct FunctionMessage(pub String, pub String);
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct AssistantMessage(pub String);
