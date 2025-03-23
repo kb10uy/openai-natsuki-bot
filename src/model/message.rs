@@ -9,6 +9,7 @@ pub enum Message {
     Assistant(AssistantMessage),
 }
 
+#[allow(dead_code)]
 impl Message {
     pub fn new_system(text: impl Into<String>) -> Message {
         Message::System(SystemMessage(text.into()))

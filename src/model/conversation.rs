@@ -9,6 +9,7 @@ pub struct Conversation {
     messages: Vec<Message>,
 }
 
+#[allow(dead_code)]
 impl Conversation {
     pub fn new_now(system: Option<Message>) -> Conversation {
         Conversation {

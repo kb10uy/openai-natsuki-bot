@@ -8,4 +8,18 @@ pub enum Error {
         #[from]
         crate::chat::error::Error,
     ),
+
+    #[error("HTTP error: {0}")]
+    Http(
+        #[source]
+        #[from]
+        reqwest::Error,
+    ),
+
+    #[error("Mastodon error: {0}")]
+    Mastodon(
+        #[source]
+        #[from]
+        mastodon_async::Error,
+    ),
 }

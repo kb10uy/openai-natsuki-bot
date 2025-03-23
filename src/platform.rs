@@ -2,12 +2,9 @@ pub mod cli;
 pub mod error;
 pub mod mastodon;
 
-use crate::chat::ChatInterface;
+use std::sync::Arc;
 
 pub trait ConversationPlatform<B> {
-    /// このプラットフォームインターフェースを作成する。
-    fn create(chat_interface: &ChatInterface<B>) -> Self;
-
     /// このプラットフォームに対して処理を開始する。
-    async fn execute(self) -> Result<(), error::Error>;
+    async fn execute(self: Arc<Self>) -> Result<(), error::Error>;
 }

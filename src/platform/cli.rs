@@ -4,7 +4,7 @@ use crate::{
     model::message::Message,
 };
 
-use std::io::stdin;
+use std::{io::stdin, sync::Arc};
 
 use colored::Colorize;
 use thiserror::Error as ThisError;
@@ -20,13 +20,7 @@ pub struct CliPlatform<B> {
 }
 
 impl<B: ChatBackend> ConversationPlatform<B> for CliPlatform<B> {
-    fn create(chat_interface: &ChatInterface<B>) -> Self {
-        CliPlatform {
-            chat: chat_interface.clone(),
-        }
-    }
-
-    async fn execute(self) -> Result<(), Error> {
+    async fn execute(self: Arc<Self>) -> Result<(), Error> {
         let mut conversation = self.chat.create_conversation();
 
         // CLI のテキスト入力を別スレッドに分ける
@@ -51,6 +45,12 @@ impl<B: ChatBackend> ConversationPlatform<B> for CliPlatform<B> {
 }
 
 impl<B: ChatBackend> CliPlatform<B> {
+    pub fn new(chat_interface: &ChatInterface<B>) -> Arc<Self> {
+        Arc::new(CliPlatform {
+            chat: chat_interface.clone(),
+        })
+    }
+
     /// stdin の行を Sender に流す。
     async fn handle_user_input(tx: Sender<String>) -> Result<(), CliError> {
         debug!("reading stdin in another task");

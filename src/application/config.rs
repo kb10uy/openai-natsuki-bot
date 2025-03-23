@@ -16,6 +16,7 @@ pub async fn load_config(path: impl AsRef<Path>) -> Result<AppConfig> {
 pub struct AppConfig {
     pub openai: AppConfigOpenai,
     pub assistant: AppConfigAssistant,
+    pub platform: AppConfigPlatform,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -28,4 +29,25 @@ pub struct AppConfigOpenai {
 #[derive(Debug, Clone, Deserialize)]
 pub struct AppConfigAssistant {
     pub system_role: String,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct AppConfigPlatform {
+    #[serde(default = "Default::default")]
+    pub cli: AppConfigPlatformCli,
+
+    #[serde(default = "Default::default")]
+    pub mastodon: AppConfigPlatformMastodon,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct AppConfigPlatformCli {
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct AppConfigPlatformMastodon {
+    pub enabled: bool,
+    pub server_url: String,
+    pub token: String,
 }
