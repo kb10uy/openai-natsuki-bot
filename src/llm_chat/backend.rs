@@ -4,7 +4,7 @@ mod responses;
 pub use chat_completion::ChatCompletionBackend;
 
 use crate::{
-    chat::{ChatUpdate, error::Error},
+    llm_chat::{ChatUpdate, error::Error},
     model::conversation::Conversation,
 };
 

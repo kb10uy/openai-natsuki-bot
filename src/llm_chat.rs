@@ -3,7 +3,7 @@ pub mod error;
 
 use std::fmt::Debug;
 
-use crate::{chat::backend::Backend, model::conversation::Conversation};
+use crate::{llm_chat::backend::Backend, model::conversation::Conversation};
 
 /// Conversation を送信した結果 OpenAI によって生成された内容。
 #[derive(Debug, Clone)]

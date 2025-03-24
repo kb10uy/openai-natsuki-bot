@@ -7,7 +7,7 @@ pub enum Error {
     Chat(
         #[source]
         #[from]
-        crate::chat::error::Error,
+        crate::llm_chat::error::Error,
     ),
 
     #[error("HTTP error: {0}")]

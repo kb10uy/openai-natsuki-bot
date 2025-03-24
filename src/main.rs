@@ -1,13 +1,13 @@
 mod application;
 mod assistant;
-mod chat;
+mod llm_chat;
 mod model;
 mod platform;
 
 use crate::{
     application::{cli::Arguments, config::load_config},
     assistant::Assistant,
-    chat::{ChatInterface, backend::ChatCompletionBackend},
+    llm_chat::{ChatInterface, backend::ChatCompletionBackend},
     platform::{ConversationPlatform, cli::CliPlatform, mastodon::MastodonPlatform},
 };
 

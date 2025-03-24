@@ -2,7 +2,7 @@ pub mod error;
 
 use crate::{
     application::config::AppConfigAssistant,
-    chat::ChatInterface,
+    llm_chat::ChatInterface,
     model::{
         conversation::Conversation,
         message::{AssistantMessage, Message},
