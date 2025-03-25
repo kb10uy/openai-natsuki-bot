@@ -4,7 +4,7 @@ mod responses;
 pub use chat_completion::ChatCompletionBackend;
 
 use crate::{
-    llm_chat::{ChatUpdate, error::Error},
+    llm_chat::{LlmChatUpdate, error::Error},
     model::conversation::Conversation,
 };
 
@@ -16,5 +16,5 @@ use async_trait::async_trait;
 #[allow(dead_code)]
 pub trait Backend: 'static + Send + Sync + Debug {
     /// `Conversation` を送信する。
-    async fn send_conversation(&self, conversation: &Conversation) -> Result<ChatUpdate, Error>;
+    async fn send_conversation(&self, conversation: &Conversation) -> Result<LlmChatUpdate, Error>;
 }

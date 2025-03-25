@@ -1,6 +1,6 @@
 use crate::{
     application::{config::AppConfigOpenai, constants::USER_AGENT},
-    llm_chat::{ChatUpdate, backend::Backend, error::Error},
+    llm_chat::{LlmChatUpdate, backend::Backend, error::Error},
     model::{conversation::Conversation, message::Message},
 };
 
@@ -32,7 +32,7 @@ impl ChatCompletionBackend {
 
 #[async_trait]
 impl Backend for ChatCompletionBackend {
-    async fn send_conversation(&self, conversation: &Conversation) -> Result<ChatUpdate, Error> {
+    async fn send_conversation(&self, conversation: &Conversation) -> Result<LlmChatUpdate, Error> {
         let messages = conversation
             .messages()
             .iter()
@@ -49,7 +49,7 @@ impl Backend for ChatCompletionBackend {
             return Err(Error::NoChoice);
         };
 
-        let update = ChatUpdate {
+        let update = LlmChatUpdate {
             text: first_choice.message.content.clone(),
         };
         Ok(update)
