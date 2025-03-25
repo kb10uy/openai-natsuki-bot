@@ -8,7 +8,7 @@ use std::fmt::Debug;
 
 /// Conversation を送信した結果 OpenAI API によって生成された内容。
 #[derive(Debug, Clone)]
-pub struct LlmChatUpdate {
+pub struct LlmUpdate {
     pub text: Option<String>,
 }
 
@@ -18,14 +18,15 @@ pub struct LlmInterface {
 }
 
 impl LlmInterface {
-    // ChatInterface を作成する。
+    // `LlmInterface` を作成する。
     pub async fn new(backend: impl Backend + 'static) -> Result<LlmInterface, error::Error> {
         Ok(LlmInterface {
             backend: Box::new(backend),
         })
     }
 
-    pub async fn send(&self, conversation: &Conversation) -> Result<LlmChatUpdate, error::Error> {
+    /// `Conversation` を送信する。
+    pub async fn send(&self, conversation: &Conversation) -> Result<LlmUpdate, error::Error> {
         let update = self.backend.send_conversation(conversation).await?;
         Ok(update)
     }

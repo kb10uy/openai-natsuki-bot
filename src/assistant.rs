@@ -33,8 +33,8 @@ impl Assistant {
 
     /// 指定された `Conversation` が「完了」するまで処理する。
     pub async fn process_conversation(&self, conversation: &Conversation) -> Result<ConversationUpdate, error::Error> {
-        let chat_update = self.0.llm.send(conversation).await?;
-        let Some(response_text) = chat_update.text else {
+        let update = self.0.llm.send(conversation).await?;
+        let Some(response_text) = update.text else {
             return Err(error::Error::NoAssistantResponse);
         };
 

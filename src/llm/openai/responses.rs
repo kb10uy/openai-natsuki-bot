@@ -1,6 +1,6 @@
 use crate::{
     application::config::AppConfigOpenai,
-    llm::{LlmChatUpdate, backend::Backend, error::Error, openai::create_openai_client},
+    llm::{LlmUpdate, backend::Backend, error::Error, openai::create_openai_client},
     model::conversation::Conversation,
 };
 
@@ -23,7 +23,7 @@ impl ResponsesBackend {
 }
 
 impl Backend for ResponsesBackend {
-    fn send_conversation<'a>(&'a self, conversation: &'a Conversation) -> BoxFuture<'a, Result<LlmChatUpdate, Error>> {
+    fn send_conversation<'a>(&'a self, conversation: &'a Conversation) -> BoxFuture<'a, Result<LlmUpdate, Error>> {
         let cloned = self.0.clone();
         async move { cloned.send_conversation(conversation).await }.boxed()
     }
@@ -37,7 +37,7 @@ struct ResponsesBackendInner {
 }
 
 impl ResponsesBackendInner {
-    async fn send_conversation(&self, _conversation: &Conversation) -> Result<LlmChatUpdate, Error> {
+    async fn send_conversation(&self, _conversation: &Conversation) -> Result<LlmUpdate, Error> {
         todo!();
     }
 }

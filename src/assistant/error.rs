@@ -2,15 +2,15 @@ use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]
 pub enum Error {
-    /// `ChatInterface` 内のエラー。
-    #[error("chat interface error: {0}")]
-    Chat(
+    /// `LlmInterface` 内のエラー。
+    #[error("LLM interface error: {0}")]
+    Llm(
         #[source]
         #[from]
         crate::llm::error::Error,
     ),
 
-    /// `ChatInterface` 内のエラー。
+    /// 永続化層のエラー。
     #[error("persistence error: {0}")]
     Persistence(
         #[source]
@@ -26,6 +26,6 @@ pub enum Error {
     ),
 
     /// assistant role のメッセージを構築できない。
-    #[error("chat interface returned no response")]
+    #[error("LLM interface returned no response")]
     NoAssistantResponse,
 }

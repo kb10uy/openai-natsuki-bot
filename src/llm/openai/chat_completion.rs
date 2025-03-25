@@ -1,6 +1,6 @@
 use crate::{
     application::config::AppConfigOpenai,
-    llm::{LlmChatUpdate, backend::Backend, error::Error, openai::create_openai_client},
+    llm::{LlmUpdate, backend::Backend, error::Error, openai::create_openai_client},
     model::{conversation::Conversation, message::Message},
 };
 
@@ -31,7 +31,7 @@ impl ChatCompletionBackend {
 }
 
 impl Backend for ChatCompletionBackend {
-    fn send_conversation<'a>(&'a self, conversation: &'a Conversation) -> BoxFuture<'a, Result<LlmChatUpdate, Error>> {
+    fn send_conversation<'a>(&'a self, conversation: &'a Conversation) -> BoxFuture<'a, Result<LlmUpdate, Error>> {
         let cloned = self.0.clone();
         async move { cloned.send_conversation(conversation).await }.boxed()
     }
@@ -45,7 +45,7 @@ struct ChatCompletionBackendInner {
 }
 
 impl ChatCompletionBackendInner {
-    async fn send_conversation(&self, conversation: &Conversation) -> Result<LlmChatUpdate, Error> {
+    async fn send_conversation(&self, conversation: &Conversation) -> Result<LlmUpdate, Error> {
         let messages = conversation.messages().iter().map(transform_message).collect();
         let request = CreateChatCompletionRequest {
             messages,
@@ -59,7 +59,7 @@ impl ChatCompletionBackendInner {
             return Err(Error::NoChoice);
         };
 
-        let update = LlmChatUpdate {
+        let update = LlmUpdate {
             text: first_choice.message.content.clone(),
         };
         Ok(update)

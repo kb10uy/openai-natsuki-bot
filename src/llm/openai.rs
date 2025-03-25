@@ -20,13 +20,13 @@ pub async fn create_openai_llm(config: &AppConfigOpenai) -> Result<LlmInterface,
     match config.backend {
         AppConfigOpenaiBackend::ChatCompletion => {
             let backend = ChatCompletionBackend::new(config).await?;
-            let llm_chat = LlmInterface::new(backend).await?;
-            Ok(llm_chat)
+            let llm = LlmInterface::new(backend).await?;
+            Ok(llm)
         }
         AppConfigOpenaiBackend::Resnposes => {
             let backend = ResponsesBackend::new(config).await?;
-            let llm_chat = LlmInterface::new(backend).await?;
-            Ok(llm_chat)
+            let llm = LlmInterface::new(backend).await?;
+            Ok(llm)
         }
     }
 }
