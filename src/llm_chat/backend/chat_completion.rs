@@ -1,34 +1,48 @@
 use crate::{
-    application::{config::AppConfigOpenai, constants::USER_AGENT},
-    llm_chat::{LlmChatUpdate, backend::Backend, error::Error},
+    application::config::AppConfigOpenai,
+    llm_chat::{LlmChatUpdate, backend::Backend, error::Error, openai::create_openai_client},
     model::{conversation::Conversation, message::Message},
 };
+
+use std::sync::Arc;
 
 use async_openai::{
     Client,
     config::OpenAIConfig,
     types::{ChatCompletionRequestFunctionMessage, ChatCompletionRequestMessage, CreateChatCompletionRequest},
 };
-use async_trait::async_trait;
+use futures::{FutureExt, future::BoxFuture};
 
-/// OpenAI の Chat Completion API を利用したバックエンド。
-#[derive(Debug)]
-pub struct ChatCompletionBackend {
-    client: Client<OpenAIConfig>,
-    model: String,
-}
+/// OpenAI Chat Completion API を利用したバックエンド。
+#[derive(Debug, Clone)]
+pub struct ChatCompletionBackend(Arc<ChatCompletionBackendInner>);
 
 impl ChatCompletionBackend {
     pub async fn new(openai_config: &AppConfigOpenai) -> Result<ChatCompletionBackend, Error> {
         let client = create_openai_client(openai_config).await?;
         let model = openai_config.model.clone();
 
-        Ok(ChatCompletionBackend { client, model })
+        Ok(ChatCompletionBackend(Arc::new(ChatCompletionBackendInner {
+            client,
+            model,
+        })))
     }
 }
 
-#[async_trait]
 impl Backend for ChatCompletionBackend {
+    fn send_conversation<'a>(&'a self, conversation: &'a Conversation) -> BoxFuture<'a, Result<LlmChatUpdate, Error>> {
+        let cloned = self.0.clone();
+        async move { cloned.send_conversation(conversation).await }.boxed()
+    }
+}
+
+#[derive(Debug)]
+struct ChatCompletionBackendInner {
+    client: Client<OpenAIConfig>,
+    model: String,
+}
+
+impl ChatCompletionBackendInner {
     async fn send_conversation(&self, conversation: &Conversation) -> Result<LlmChatUpdate, Error> {
         let messages = conversation.messages().iter().map(transform_message).collect();
         let request = CreateChatCompletionRequest {
@@ -47,16 +61,6 @@ impl Backend for ChatCompletionBackend {
         };
         Ok(update)
     }
-}
-
-async fn create_openai_client(openai_config: &AppConfigOpenai) -> Result<Client<OpenAIConfig>, Error> {
-    let config = OpenAIConfig::new()
-        .with_api_key(&openai_config.token)
-        .with_api_base(&openai_config.endpoint);
-    let http_client = reqwest::ClientBuilder::new().user_agent(USER_AGENT).build()?;
-
-    let client = Client::with_config(config).with_http_client(http_client);
-    Ok(client)
 }
 
 fn transform_message(message: &Message) -> ChatCompletionRequestMessage {

@@ -10,8 +10,7 @@ use std::{
     sync::{Arc, LazyLock},
 };
 
-use async_trait::async_trait;
-use futures::prelude::*;
+use futures::{future::BoxFuture, prelude::*};
 use html2md::parse_html;
 use mastodon_async::{
     Mastodon, NewStatus, Visibility,
@@ -53,14 +52,10 @@ impl MastodonPlatform {
     }
 }
 
-#[async_trait]
 impl ConversationPlatform for MastodonPlatform {
-    fn execute(&self) -> impl Future<Output = Result<(), Error>> + Send + 'static {
+    fn execute(&self) -> BoxFuture<'static, Result<(), Error>> {
         let cloned_inner = self.0.clone();
-        async move {
-            cloned_inner.execute().await?;
-            Ok(())
-        }
+        cloned_inner.execute().boxed()
     }
 }
 

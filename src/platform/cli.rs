@@ -4,6 +4,7 @@ use crate::{assistant::Assistant, model::message::Message};
 use std::io::stdin;
 
 use colored::Colorize;
+use futures::{FutureExt, future::BoxFuture};
 use thiserror::Error as ThisError;
 use tokio::{
     spawn,
@@ -17,7 +18,7 @@ pub struct CliPlatform {
 }
 
 impl ConversationPlatform for CliPlatform {
-    fn execute(&self) -> impl Future<Output = Result<(), Error>> + Send + 'static {
+    fn execute(&self) -> BoxFuture<'static, Result<(), Error>> {
         let assistant = self.assistant.clone();
 
         async move {
@@ -39,6 +40,7 @@ impl ConversationPlatform for CliPlatform {
 
             Ok(())
         }
+        .boxed()
     }
 }
 

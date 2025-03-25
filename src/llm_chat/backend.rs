@@ -2,6 +2,9 @@ mod chat_completion;
 mod responses;
 
 pub use chat_completion::ChatCompletionBackend;
+pub use responses::ResponsesBackend;
+
+use futures::future::BoxFuture;
 
 use crate::{
     llm_chat::{LlmChatUpdate, error::Error},
@@ -10,11 +13,8 @@ use crate::{
 
 use std::fmt::Debug;
 
-use async_trait::async_trait;
-
-#[async_trait]
 #[allow(dead_code)]
-pub trait Backend: 'static + Send + Sync + Debug {
+pub trait Backend: Send + Sync + Debug {
     /// `Conversation` を送信する。
-    async fn send_conversation(&self, conversation: &Conversation) -> Result<LlmChatUpdate, Error>;
+    fn send_conversation<'a>(&'a self, conversation: &'a Conversation) -> BoxFuture<'a, Result<LlmChatUpdate, Error>>;
 }
