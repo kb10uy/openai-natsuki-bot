@@ -1,6 +1,7 @@
 use crate::{
     application::{config::AppConfigPlatformMastodon, constants::USER_AGENT},
     assistant::Assistant,
+    model::message::Message,
     platform::{ConversationPlatform, error::Error},
 };
 
@@ -14,7 +15,7 @@ use mastodon_async::{
 };
 use regex::Regex;
 use tokio::spawn;
-use tracing::info;
+use tracing::{error, info};
 
 const PLATFORM_KEY: &str = "mastodon";
 
@@ -77,20 +78,23 @@ impl MastodonPlatformInner {
         Ok(())
     }
 
-    async fn process_event(self: Arc<Self>, event: Event) -> Result<(), Error> {
-        match event {
+    async fn process_event(self: Arc<Self>, event: Event) {
+        let processed = match event {
             Event::Update(status) => self.process_status(status).await,
             Event::Notification(notification) => match notification.notification_type {
-                NotificationType::Mention => {
-                    let status = notification
-                        .status
-                        .ok_or_else(|| Error::ExpectationMismatch("mentioned status not found".into()))?;
-                    self.process_status(status).await
-                }
+                NotificationType::Mention => match notification.status {
+                    Some(status) => self.process_status(status).await,
+                    None => Err(Error::ExpectationMismatch("mentioned status not found".into())),
+                },
                 _ => Ok(()),
             },
             _ => Ok(()),
-        }
+        };
+
+        let Err(err) = processed else {
+            return;
+        };
+        error!("mastodon event process reported error: {err}");
     }
 
     async fn process_status(&self, status: Status) -> Result<(), Error> {
@@ -124,6 +128,7 @@ impl MastodonPlatformInner {
         };
 
         // Conversation の更新・呼出し
+        conversation.push_message(Message::new_user(stripped));
         let update = self.assistant.process_conversation(&conversation).await?;
         let assistant_response = update.assistant_response;
         info!(

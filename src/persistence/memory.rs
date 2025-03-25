@@ -39,9 +39,9 @@ impl ConversationStorage for MemoryConversationStorage {
         &'a self,
         conversation: &'a Conversation,
         platform: &'a str,
-        context: &'a str,
+        new_context: &'a str,
     ) -> BoxFuture<'a, Result<(), Error>> {
-        async move { self.0.upsert(conversation, platform, context).await }.boxed()
+        async move { self.0.upsert(conversation, platform, new_context).await }.boxed()
     }
 }
 
@@ -68,13 +68,13 @@ impl MemoryConversationStorageInner {
         Ok(conversation)
     }
 
-    async fn upsert(&self, conversation: &Conversation, platform: &str, context: &str) -> Result<(), Error> {
+    async fn upsert(&self, conversation: &Conversation, platform: &str, new_context: &str) -> Result<(), Error> {
         let mut locked_conv = self.conversations.lock().await;
         let mut locked_pc = self.platform_contexts.lock().await;
 
         locked_conv.insert(conversation.id(), conversation.clone());
         locked_pc.remove_by_right(&conversation.id());
-        locked_pc.insert((platform.to_string(), context.to_string()), conversation.id());
+        locked_pc.insert((platform.to_string(), new_context.to_string()), conversation.id());
         Ok(())
     }
 }

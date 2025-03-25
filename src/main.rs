@@ -6,18 +6,20 @@ mod persistence;
 mod platform;
 
 use crate::{
-    application::{cli::Arguments, config::load_config},
+    application::{
+        cli::Arguments,
+        config::{AppConfig, AppConfigOpenaiBackend, AppConfigPersistenceEngine, load_config},
+    },
     assistant::Assistant,
     llm_chat::{
         LlmChatInterface,
         backend::{ChatCompletionBackend, ResponsesBackend},
     },
-    persistence::MemoryConversationStorage,
+    persistence::{MemoryConversationStorage, SqliteConversationStorage},
     platform::{ConversationPlatform, cli::CliPlatform, mastodon::MastodonPlatform},
 };
 
 use anyhow::Result;
-use application::config::{AppConfig, AppConfigOpenaiBackend};
 use clap::Parser;
 use futures::future::join_all;
 use tokio::spawn;
@@ -29,10 +31,7 @@ async fn main() -> Result<()> {
     let args = Arguments::parse();
     let config = load_config(args.config).await?;
 
-    let llm_chat = construct_llm_chat(&config).await?;
-    let storage = MemoryConversationStorage::new();
-    let assistant = Assistant::new(&config.assistant, llm_chat, storage);
-
+    let assistant = construct_assistant(&config).await?;
     let mut platform_tasks = vec![];
 
     // CLI
@@ -54,6 +53,20 @@ async fn main() -> Result<()> {
 
     join_all(platform_tasks).await;
     Ok(())
+}
+
+async fn construct_assistant(config: &AppConfig) -> Result<Assistant> {
+    let llm_chat = construct_llm_chat(config).await?;
+    match config.persistence.engine {
+        AppConfigPersistenceEngine::Sqlite => {
+            let storage = SqliteConversationStorage::new(&config.persistence).await?;
+            Ok(Assistant::new(&config.assistant, llm_chat, storage))
+        }
+        AppConfigPersistenceEngine::Memory => {
+            let storage = MemoryConversationStorage::new();
+            Ok(Assistant::new(&config.assistant, llm_chat, storage))
+        }
+    }
 }
 
 async fn construct_llm_chat(config: &AppConfig) -> Result<LlmChatInterface> {

@@ -12,30 +12,23 @@ pub async fn load_config(path: impl AsRef<Path>) -> Result<AppConfig> {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct AppConfig {
+    pub persistence: AppConfigPersistence,
+    pub platform: AppConfigPlatform,
     pub openai: AppConfigOpenai,
     pub assistant: AppConfigAssistant,
-    pub platform: AppConfigPlatform,
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct AppConfigOpenai {
-    pub endpoint: String,
-    pub token: String,
-    pub model: String,
-    pub backend: AppConfigOpenaiBackend,
+pub struct AppConfigPersistence {
+    pub engine: AppConfigPersistenceEngine,
+    pub database: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum AppConfigOpenaiBackend {
-    ChatCompletion,
-    Resnposes,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct AppConfigAssistant {
-    pub system_role: String,
-    pub sensitive_marker: String,
+pub enum AppConfigPersistenceEngine {
+    Sqlite,
+    Memory,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -58,4 +51,25 @@ pub struct AppConfigPlatformMastodon {
     pub server_url: String,
     pub token: String,
     pub sensitive_spoiler: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct AppConfigOpenai {
+    pub endpoint: String,
+    pub token: String,
+    pub model: String,
+    pub backend: AppConfigOpenaiBackend,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AppConfigOpenaiBackend {
+    ChatCompletion,
+    Resnposes,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct AppConfigAssistant {
+    pub system_role: String,
+    pub sensitive_marker: String,
 }

@@ -1,7 +1,9 @@
 pub mod error;
 mod memory;
+mod sqlite;
 
 pub use memory::MemoryConversationStorage;
+pub use sqlite::SqliteConversationStorage;
 
 use crate::{model::conversation::Conversation, persistence::error::Error};
 
@@ -29,6 +31,6 @@ pub trait ConversationStorage: Send + Sync + Debug {
         &'a self,
         conversation: &'a Conversation,
         platform: &'a str,
-        context: &'a str,
+        new_context: &'a str,
     ) -> BoxFuture<'a, Result<(), Error>>;
 }
