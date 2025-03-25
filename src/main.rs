@@ -2,6 +2,7 @@ mod application;
 mod assistant;
 mod llm_chat;
 mod model;
+mod persistence;
 mod platform;
 
 use crate::{
@@ -11,6 +12,7 @@ use crate::{
         LlmChatInterface,
         backend::{ChatCompletionBackend, ResponsesBackend},
     },
+    persistence::MemoryConversationStorage,
     platform::{ConversationPlatform, cli::CliPlatform, mastodon::MastodonPlatform},
 };
 
@@ -28,7 +30,8 @@ async fn main() -> Result<()> {
     let config = load_config(args.config).await?;
 
     let llm_chat = construct_llm_chat(&config).await?;
-    let assistant = Assistant::new(&config.assistant, llm_chat);
+    let storage = MemoryConversationStorage::new();
+    let assistant = Assistant::new(&config.assistant, llm_chat, storage);
 
     let mut platform_tasks = vec![];
 

@@ -10,6 +10,14 @@ pub enum Error {
         crate::llm_chat::error::Error,
     ),
 
+    /// `ChatInterface` 内のエラー。
+    #[error("persistence error: {0}")]
+    Persistence(
+        #[source]
+        #[from]
+        crate::persistence::error::Error,
+    ),
+
     #[error("HTTP error: {0}")]
     Http(
         #[source]

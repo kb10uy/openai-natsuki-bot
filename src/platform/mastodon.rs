@@ -1,14 +1,10 @@
 use crate::{
     application::{config::AppConfigPlatformMastodon, constants::USER_AGENT},
     assistant::Assistant,
-    model::{conversation::Conversation, message::Message},
     platform::{ConversationPlatform, error::Error},
 };
 
-use std::{
-    collections::HashMap,
-    sync::{Arc, LazyLock},
-};
+use std::sync::{Arc, LazyLock};
 
 use futures::{future::BoxFuture, prelude::*};
 use html2md::parse_html;
@@ -17,8 +13,10 @@ use mastodon_async::{
     entities::{account::Account, event::Event, notification::Type as NotificationType, status::Status},
 };
 use regex::Regex;
-use tokio::{spawn, sync::Mutex};
+use tokio::spawn;
 use tracing::info;
+
+const PLATFORM_KEY: &str = "mastodon";
 
 static RE_HEAD_MENTION: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r#"^\s*\[@.+?\]\(.+?\)\s*"#).expect("invalid regex"));
@@ -46,8 +44,6 @@ impl MastodonPlatform {
             mastodon,
             self_account,
             sensitive_spoiler: config_mastodon.sensitive_spoiler.clone(),
-
-            history: Mutex::new(HashMap::new()),
         })))
     }
 }
@@ -65,10 +61,6 @@ struct MastodonPlatformInner {
     mastodon: Mastodon,
     self_account: Account,
     sensitive_spoiler: String,
-
-    // Arc<Mutex<Conversation>> そんなわけなくない？
-    /// Mastodon 側のツリー最後の in_reply_to StatudId と Conversation の組
-    history: Mutex<HashMap<String, Arc<Mutex<Conversation>>>>,
 }
 
 impl MastodonPlatformInner {
@@ -113,25 +105,26 @@ impl MastodonPlatformInner {
         info!("[{}] {}: {:?}", status.id, status.account.acct, stripped);
 
         // Conversation の検索
-        let mut locked_history = self.history.lock().await;
-        let in_reply_to_id_str = status.in_reply_to_id.map(|si| si.to_string());
-        let (old_history_id, conversation) = match in_reply_to_id_str {
-            Some(id) if locked_history.contains_key(&id) => {
-                info!("found conversation with last status ID {id}");
-                let conversation = locked_history[&id].clone();
-                (Some(id), conversation)
-            }
-            _ => {
+        let context_key = status.in_reply_to_id.map(|si| si.to_string());
+        let mut conversation = match context_key {
+            None => {
                 info!("creating new conversation");
-                (None, Arc::new(Mutex::new(self.assistant.new_conversation())))
+                self.assistant.new_conversation()
+            }
+            Some(context) => {
+                info!("restoring conversation with last status ID {context}");
+                match self.assistant.restore_conversation(PLATFORM_KEY, &context).await? {
+                    Some(c) => c,
+                    None => {
+                        info!("conversation has been lost, creating new one");
+                        self.assistant.new_conversation()
+                    }
+                }
             }
         };
 
         // Conversation の更新・呼出し
-        let mut locked_conversation = conversation.lock().await;
-        locked_conversation.push_message(Message::new_user(stripped));
-
-        let update = self.assistant.process_conversation(&locked_conversation).await?;
+        let update = self.assistant.process_conversation(&conversation).await?;
         let assistant_response = update.assistant_response;
         info!(
             "夏稀[{}]: {:?}",
@@ -160,14 +153,12 @@ impl MastodonPlatformInner {
         let replied_status = self.mastodon.new_status(reply_status).await?;
 
         // Conversation/history の更新
-        locked_conversation.push_message(assistant_response.into());
-        drop(locked_conversation);
+        conversation.push_message(assistant_response.into());
 
-        if let Some(id) = old_history_id {
-            locked_history.remove(&id);
-        }
-        let new_history_id = replied_status.id.to_string();
-        locked_history.insert(new_history_id, conversation);
+        let new_history_id = replied_status.id.as_ref();
+        self.assistant
+            .save_conversation(&conversation, PLATFORM_KEY, new_history_id)
+            .await?;
 
         Ok(())
     }

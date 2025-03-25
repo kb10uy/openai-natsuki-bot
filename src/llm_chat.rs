@@ -19,7 +19,7 @@ pub struct LlmChatInterface {
 
 impl LlmChatInterface {
     // ChatInterface を作成する。
-    pub async fn new<B: 'static + Backend>(backend: B) -> Result<LlmChatInterface, error::Error> {
+    pub async fn new(backend: impl Backend + 'static) -> Result<LlmChatInterface, error::Error> {
         Ok(LlmChatInterface {
             backend: Box::new(backend),
         })
