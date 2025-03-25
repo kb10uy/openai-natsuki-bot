@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::{collections::HashMap, path::Path};
 
 use anyhow::{Context as _, Result};
 use serde::Deserialize;
@@ -71,6 +71,12 @@ pub enum AppConfigOpenaiBackend {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct AppConfigAssistant {
+    pub identity: String,
+    pub identities: HashMap<String, AppConfigAssistantIdentity>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct AppConfigAssistantIdentity {
     pub system_role: String,
     pub sensitive_marker: String,
 }

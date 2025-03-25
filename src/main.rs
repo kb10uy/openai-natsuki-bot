@@ -19,7 +19,7 @@ use crate::{
     platform::{ConversationPlatform, cli::CliPlatform, mastodon::MastodonPlatform},
 };
 
-use anyhow::Result;
+use anyhow::{Result, bail};
 use clap::Parser;
 use futures::future::join_all;
 use tokio::spawn;
@@ -56,15 +56,19 @@ async fn main() -> Result<()> {
 }
 
 async fn construct_assistant(config: &AppConfig) -> Result<Assistant> {
+    let Some(assistant_identity) = config.assistant.identities.get(&config.assistant.identity) else {
+        bail!("assistant identity {} not defined", config.assistant.identity);
+    };
+
     let llm_chat = construct_llm_chat(config).await?;
     match config.persistence.engine {
         AppConfigPersistenceEngine::Sqlite => {
             let storage = SqliteConversationStorage::new(&config.persistence).await?;
-            Ok(Assistant::new(&config.assistant, llm_chat, storage))
+            Ok(Assistant::new(assistant_identity, llm_chat, storage))
         }
         AppConfigPersistenceEngine::Memory => {
             let storage = MemoryConversationStorage::new();
-            Ok(Assistant::new(&config.assistant, llm_chat, storage))
+            Ok(Assistant::new(assistant_identity, llm_chat, storage))
         }
     }
 }

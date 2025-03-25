@@ -1,7 +1,7 @@
 pub mod error;
 
 use crate::{
-    application::config::AppConfigAssistant,
+    application::config::AppConfigAssistantIdentity,
     assistant::error::Error,
     llm_chat::LlmChatInterface,
     model::{
@@ -19,15 +19,15 @@ pub struct Assistant(Arc<AssistantInner>);
 
 impl Assistant {
     pub fn new(
-        assistant_config: &AppConfigAssistant,
+        assistant_identity: &AppConfigAssistantIdentity,
         chat_interface: LlmChatInterface,
         storage: impl ConversationStorage + 'static,
     ) -> Assistant {
         Assistant(Arc::new(AssistantInner {
             chat_interface,
             storage: Box::new(storage),
-            system_role: assistant_config.system_role.clone(),
-            sensitive_marker: assistant_config.sensitive_marker.clone(),
+            system_role: assistant_identity.system_role.clone(),
+            sensitive_marker: assistant_identity.sensitive_marker.clone(),
         }))
     }
 
