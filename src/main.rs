@@ -7,11 +7,15 @@ mod platform;
 use crate::{
     application::{cli::Arguments, config::load_config},
     assistant::Assistant,
-    llm_chat::{LlmChatInterface, backend::ChatCompletionBackend},
+    llm_chat::{
+        LlmChatInterface,
+        backend::{ChatCompletionBackend, ResponsesBackend},
+    },
     platform::{ConversationPlatform, cli::CliPlatform, mastodon::MastodonPlatform},
 };
 
 use anyhow::Result;
+use application::config::{AppConfig, AppConfigOpenaiBackend};
 use clap::Parser;
 use futures::future::join_all;
 use tokio::spawn;
@@ -23,8 +27,7 @@ async fn main() -> Result<()> {
     let args = Arguments::parse();
     let config = load_config(args.config).await?;
 
-    let backend = ChatCompletionBackend::new(&config.openai).await?;
-    let llm_chat = LlmChatInterface::new(backend).await?;
+    let llm_chat = construct_llm_chat(&config).await?;
     let assistant = Assistant::new(&config.assistant, llm_chat);
 
     let mut platform_tasks = vec![];
@@ -48,4 +51,19 @@ async fn main() -> Result<()> {
 
     join_all(platform_tasks).await;
     Ok(())
+}
+
+async fn construct_llm_chat(config: &AppConfig) -> Result<LlmChatInterface> {
+    match config.openai.backend {
+        AppConfigOpenaiBackend::ChatCompletion => {
+            let backend = ChatCompletionBackend::new(&config.openai).await?;
+            let llm_chat = LlmChatInterface::new(backend).await?;
+            Ok(llm_chat)
+        }
+        AppConfigOpenaiBackend::Resnposes => {
+            let backend = ResponsesBackend::new(&config.openai).await?;
+            let llm_chat = LlmChatInterface::new(backend).await?;
+            Ok(llm_chat)
+        }
+    }
 }

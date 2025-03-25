@@ -1,7 +1,7 @@
 use crate::{
-    application::{config::AppConfigOpenai, constants::USER_AGENT},
+    application::config::AppConfigOpenai,
     llm_chat::{LlmChatUpdate, backend::Backend, error::Error, openai::create_openai_client},
-    model::{conversation::Conversation, message::Message},
+    model::conversation::Conversation,
 };
 
 use std::sync::Arc;
@@ -30,6 +30,7 @@ impl Backend for ResponsesBackend {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 struct ResponsesBackendInner {
     client: Client<OpenAIConfig>,
     model: String,
