@@ -25,6 +25,7 @@ impl ChatCompletionBackend {
         Ok(ChatCompletionBackend(Arc::new(ChatCompletionBackendInner {
             client,
             model,
+            max_token: openai_config.max_token,
         })))
     }
 }
@@ -40,6 +41,7 @@ impl Backend for ChatCompletionBackend {
 struct ChatCompletionBackendInner {
     client: Client<OpenAIConfig>,
     model: String,
+    max_token: usize,
 }
 
 impl ChatCompletionBackendInner {
@@ -48,6 +50,7 @@ impl ChatCompletionBackendInner {
         let request = CreateChatCompletionRequest {
             messages,
             model: self.model.clone(),
+            max_completion_tokens: Some(self.max_token as u32),
             ..Default::default()
         };
 

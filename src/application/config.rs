@@ -55,10 +55,11 @@ pub struct AppConfigPlatformMastodon {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct AppConfigOpenai {
+    pub backend: AppConfigOpenaiBackend,
     pub endpoint: String,
     pub token: String,
     pub model: String,
-    pub backend: AppConfigOpenaiBackend,
+    pub max_token: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
