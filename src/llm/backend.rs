@@ -1,17 +1,11 @@
-mod chat_completion;
-mod responses;
-
-pub use chat_completion::ChatCompletionBackend;
-pub use responses::ResponsesBackend;
-
-use futures::future::BoxFuture;
-
 use crate::{
-    llm_chat::{LlmChatUpdate, error::Error},
+    llm::{LlmChatUpdate, error::Error},
     model::conversation::Conversation,
 };
 
 use std::fmt::Debug;
+
+use futures::future::BoxFuture;
 
 #[allow(dead_code)]
 pub trait Backend: Send + Sync + Debug {

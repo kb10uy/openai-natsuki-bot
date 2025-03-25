@@ -1,10 +1,10 @@
-pub mod backend;
+mod backend;
 pub mod error;
-mod openai;
+pub mod openai;
+
+use crate::{llm::backend::Backend, model::conversation::Conversation};
 
 use std::fmt::Debug;
-
-use crate::{llm_chat::backend::Backend, model::conversation::Conversation};
 
 /// Conversation を送信した結果 OpenAI API によって生成された内容。
 #[derive(Debug, Clone)]
@@ -13,14 +13,14 @@ pub struct LlmChatUpdate {
 }
 
 #[derive(Debug)]
-pub struct LlmChatInterface {
+pub struct LlmInterface {
     backend: Box<dyn Backend>,
 }
 
-impl LlmChatInterface {
+impl LlmInterface {
     // ChatInterface を作成する。
-    pub async fn new(backend: impl Backend + 'static) -> Result<LlmChatInterface, error::Error> {
-        Ok(LlmChatInterface {
+    pub async fn new(backend: impl Backend + 'static) -> Result<LlmInterface, error::Error> {
+        Ok(LlmInterface {
             backend: Box::new(backend),
         })
     }

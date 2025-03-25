@@ -1,6 +1,6 @@
 use crate::{
     application::config::AppConfigOpenai,
-    llm_chat::{LlmChatUpdate, backend::Backend, error::Error, openai::create_openai_client},
+    llm::{LlmChatUpdate, backend::Backend, error::Error, openai::create_openai_client},
     model::{conversation::Conversation, message::Message},
 };
 

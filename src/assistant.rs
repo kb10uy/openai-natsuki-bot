@@ -3,7 +3,7 @@ pub mod error;
 use crate::{
     application::config::AppConfigAssistantIdentity,
     assistant::error::Error,
-    llm_chat::LlmChatInterface,
+    llm::LlmInterface,
     model::{
         conversation::Conversation,
         message::{AssistantMessage, Message},
@@ -20,12 +20,12 @@ pub struct Assistant(Arc<AssistantInner>);
 impl Assistant {
     pub fn new(
         assistant_identity: &AppConfigAssistantIdentity,
-        chat_interface: LlmChatInterface,
-        storage: impl ConversationStorage + 'static,
+        llm: LlmInterface,
+        storage: Box<dyn ConversationStorage + 'static>,
     ) -> Assistant {
         Assistant(Arc::new(AssistantInner {
-            chat_interface,
-            storage: Box::new(storage),
+            llm,
+            storage,
             system_role: assistant_identity.system_role.clone(),
             sensitive_marker: assistant_identity.sensitive_marker.clone(),
         }))
@@ -33,7 +33,7 @@ impl Assistant {
 
     /// 指定された `Conversation` が「完了」するまで処理する。
     pub async fn process_conversation(&self, conversation: &Conversation) -> Result<ConversationUpdate, error::Error> {
-        let chat_update = self.0.chat_interface.send(conversation).await?;
+        let chat_update = self.0.llm.send(conversation).await?;
         let Some(response_text) = chat_update.text else {
             return Err(error::Error::NoAssistantResponse);
         };
@@ -71,8 +71,8 @@ impl Assistant {
 
 #[derive(Debug)]
 struct AssistantInner {
-    chat_interface: LlmChatInterface,
-    storage: Box<dyn ConversationStorage>,
+    llm: LlmInterface,
+    storage: Box<dyn ConversationStorage + 'static>,
     system_role: String,
     sensitive_marker: String,
 }

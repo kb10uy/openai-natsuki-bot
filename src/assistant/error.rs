@@ -7,7 +7,7 @@ pub enum Error {
     Chat(
         #[source]
         #[from]
-        crate::llm_chat::error::Error,
+        crate::llm::error::Error,
     ),
 
     /// `ChatInterface` 内のエラー。
