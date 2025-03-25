@@ -3,7 +3,6 @@ use crate::{assistant::Assistant, model::message::Message};
 
 use std::io::stdin;
 
-use async_trait::async_trait;
 use colored::Colorize;
 use thiserror::Error as ThisError;
 use tokio::{
@@ -17,26 +16,29 @@ pub struct CliPlatform {
     assistant: Assistant,
 }
 
-#[async_trait]
 impl ConversationPlatform for CliPlatform {
-    async fn execute(&self) -> Result<(), Error> {
-        let mut conversation = self.assistant.new_conversation();
+    fn execute(&self) -> impl Future<Output = Result<(), Error>> + Send + 'static {
+        let assistant = self.assistant.clone();
 
-        // CLI のテキスト入力を別スレッドに分ける
-        let (tx, mut rx) = channel(1);
-        spawn(CliPlatform::handle_user_input(tx));
+        async move {
+            let mut conversation = assistant.new_conversation();
 
-        // 応答ループ
-        while let Some(input) = rx.recv().await {
-            info!("sending {input}");
-            conversation.push_message(Message::new_user(input));
-            let conversation_update = self.assistant.process_conversation(&conversation).await?;
-            println!(">> {}", conversation_update.assistant_response.text.bold().white());
-            conversation.push_message(conversation_update.assistant_response.into());
+            // CLI のテキスト入力を別スレッドに分ける
+            let (tx, mut rx) = channel(1);
+            spawn(CliPlatform::handle_user_input(tx));
+
+            // 応答ループ
+            while let Some(input) = rx.recv().await {
+                info!("sending {input}");
+                conversation.push_message(Message::new_user(input));
+                let conversation_update = assistant.process_conversation(&conversation).await?;
+                println!(">> {}", conversation_update.assistant_response.text.bold().white());
+                conversation.push_message(conversation_update.assistant_response.into());
+            }
+            println!("channel closed");
+
+            Ok(())
         }
-        println!("channel closed");
-
-        Ok(())
     }
 }
 

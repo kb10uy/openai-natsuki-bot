@@ -33,9 +33,8 @@ async fn main() -> Result<()> {
     if config.platform.cli.enabled {
         info!("starting CLI platform");
         let cli_platform = CliPlatform::new(assistant.clone());
-        let cli_future = cli_platform.execute();
-        let cli_task = spawn(cli_future);
-        platform_tasks.push(cli_task);
+        let cli_task = spawn(cli_platform.execute());
+        platform_tasks.push(Box::new(cli_task));
     }
 
     // Mastodon
@@ -44,7 +43,7 @@ async fn main() -> Result<()> {
         let mastodon_platform = MastodonPlatform::new(&config.platform.mastodon, assistant.clone()).await?;
         let mastodon_future = mastodon_platform.execute();
         let mastodon_task = spawn(mastodon_future);
-        platform_tasks.push(mastodon_task);
+        platform_tasks.push(Box::new(mastodon_task));
     }
 
     join_all(platform_tasks).await;

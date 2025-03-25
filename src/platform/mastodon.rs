@@ -55,8 +55,12 @@ impl MastodonPlatform {
 
 #[async_trait]
 impl ConversationPlatform for MastodonPlatform {
-    async fn execute(&self) -> Result<(), Error> {
-        self.clone().execute().await
+    fn execute(&self) -> impl Future<Output = Result<(), Error>> + Send + 'static {
+        let cloned_inner = self.0.clone();
+        async move {
+            cloned_inner.execute().await?;
+            Ok(())
+        }
     }
 }
 
@@ -78,8 +82,7 @@ impl MastodonPlatformInner {
         user_stream
             .map_err(Error::Mastodon)
             .try_for_each(async |(e, _)| {
-                let cloned = self.clone();
-                spawn(async move { cloned.process_event(e) });
+                spawn(self.clone().process_event(e));
                 Ok(())
             })
             .await?;
