@@ -7,10 +7,7 @@ use crate::{
 use async_openai::{
     Client,
     config::OpenAIConfig,
-    types::{
-        ChatCompletionRequestFunctionMessage, ChatCompletionRequestMessage,
-        CreateChatCompletionRequest,
-    },
+    types::{ChatCompletionRequestFunctionMessage, ChatCompletionRequestMessage, CreateChatCompletionRequest},
 };
 use async_trait::async_trait;
 
@@ -33,11 +30,7 @@ impl ChatCompletionBackend {
 #[async_trait]
 impl Backend for ChatCompletionBackend {
     async fn send_conversation(&self, conversation: &Conversation) -> Result<LlmChatUpdate, Error> {
-        let messages = conversation
-            .messages()
-            .iter()
-            .map(transform_message)
-            .collect();
+        let messages = conversation.messages().iter().map(transform_message).collect();
         let request = CreateChatCompletionRequest {
             messages,
             model: self.model.clone(),
@@ -56,15 +49,11 @@ impl Backend for ChatCompletionBackend {
     }
 }
 
-async fn create_openai_client(
-    openai_config: &AppConfigOpenai,
-) -> Result<Client<OpenAIConfig>, Error> {
+async fn create_openai_client(openai_config: &AppConfigOpenai) -> Result<Client<OpenAIConfig>, Error> {
     let config = OpenAIConfig::new()
         .with_api_key(&openai_config.token)
         .with_api_base(&openai_config.endpoint);
-    let http_client = reqwest::ClientBuilder::new()
-        .user_agent(USER_AGENT)
-        .build()?;
+    let http_client = reqwest::ClientBuilder::new().user_agent(USER_AGENT).build()?;
 
     let client = Client::with_config(config).with_http_client(http_client);
     Ok(client)
@@ -72,12 +61,8 @@ async fn create_openai_client(
 
 fn transform_message(message: &Message) -> ChatCompletionRequestMessage {
     match message {
-        Message::System(system_message) => {
-            ChatCompletionRequestMessage::System(system_message.0.clone().into())
-        }
-        Message::User(user_message) => {
-            ChatCompletionRequestMessage::User(user_message.0.clone().into())
-        }
+        Message::System(system_message) => ChatCompletionRequestMessage::System(system_message.0.clone().into()),
+        Message::User(user_message) => ChatCompletionRequestMessage::User(user_message.0.clone().into()),
         Message::Function(function_message) => {
             ChatCompletionRequestMessage::Function(ChatCompletionRequestFunctionMessage {
                 name: function_message.0.clone(),
