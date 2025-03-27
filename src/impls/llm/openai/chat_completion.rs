@@ -148,6 +148,7 @@ impl ChatCompletionBackendInner {
     ) -> Result<LlmUpdate, LlmError> {
         let request = CreateChatCompletionRequest {
             messages,
+            tools: Some(self.tools.lock().await.clone()),
             model: self.model.clone(),
             response_format: Some(ResponseFormat::JsonSchema {
                 json_schema: RESPONSE_JSON_SCHEMA.clone(),
