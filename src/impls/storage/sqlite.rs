@@ -1,12 +1,11 @@
 use crate::{
-    application::config::AppConfigPersistence,
-    model::conversation::Conversation,
-    persistence::{ConversationStorage, error::Error},
+    model::{config::AppConfigStorageSqlite, conversation::Conversation},
+    specs::storage::{ConversationStorage, Error},
 };
 
 use std::sync::Arc;
 
-use futures::{FutureExt, future::BoxFuture};
+use futures::{FutureExt, TryFutureExt, future::BoxFuture};
 use sqlx::{SqlitePool, prelude::FromRow};
 use uuid::Uuid;
 
@@ -14,8 +13,8 @@ use uuid::Uuid;
 pub struct SqliteConversationStorage(Arc<SqliteConversationStorageInner>);
 
 impl SqliteConversationStorage {
-    pub async fn new(config: &AppConfigPersistence) -> Result<SqliteConversationStorage, sqlx::Error> {
-        let pool = SqlitePool::connect(&config.database).await?;
+    pub async fn new(config: &AppConfigStorageSqlite) -> Result<SqliteConversationStorage, sqlx::Error> {
+        let pool = SqlitePool::connect(&config.filepath.to_string_lossy()).await?;
         Ok(SqliteConversationStorage(Arc::new(SqliteConversationStorageInner {
             pool,
         })))
@@ -56,6 +55,7 @@ impl SqliteConversationStorageInner {
             sqlx::query_as(r#"SELECT id, conversation_blob FROM conversations WHERE id = ?"#)
                 .bind(id)
                 .fetch_optional(&self.pool)
+                .map_err(|e| Error::Internal(e.into()))
                 .await?;
 
         row.map(|r| rmp_serde::from_slice(&r.conversation_blob))
@@ -70,6 +70,7 @@ impl SqliteConversationStorageInner {
         .bind(platform)
         .bind(context)
         .fetch_optional(&self.pool)
+        .map_err(|e| Error::Internal(e.into()))
         .await?;
         let Some(SqliteRowPlatformContext { conversation_id, .. }) = platform_context_row else {
             return Ok(None);
@@ -85,12 +86,14 @@ impl SqliteConversationStorageInner {
             .bind(conversation.id())
             .bind(blob)
             .execute(&self.pool)
+            .map_err(|e| Error::Internal(e.into()))
             .await?;
         sqlx::query(r#"INSERT INTO platform_contexts (conversation_id, platform, context) VALUES (?, ?, ?) ON CONFLICT DO UPDATE SET context = excluded.context;"#)
             .bind(conversation.id())
             .bind(platform)
             .bind(new_context)
             .execute(&self.pool)
+            .map_err(|e| Error::Internal(e.into()))
             .await?;
 
         Ok(())

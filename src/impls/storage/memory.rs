@@ -1,6 +1,6 @@
 use crate::{
     model::conversation::Conversation,
-    persistence::{ConversationStorage, error::Error},
+    specs::storage::{ConversationStorage, Error},
 };
 
 use std::{collections::HashMap, sync::Arc};

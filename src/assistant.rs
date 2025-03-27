@@ -1,14 +1,13 @@
 pub mod error;
 
 use crate::{
-    application::config::AppConfigAssistantIdentity,
     assistant::error::Error,
-    llm::LlmInterface,
     model::{
+        config::AppConfigAssistantIdentity,
         conversation::Conversation,
         message::{AssistantMessage, Message},
     },
-    persistence::ConversationStorage,
+    specs::{llm::LlmBackend, storage::ConversationStorage},
 };
 
 use std::{fmt::Debug, sync::Arc};
@@ -20,7 +19,7 @@ pub struct Assistant(Arc<AssistantInner>);
 impl Assistant {
     pub fn new(
         assistant_identity: &AppConfigAssistantIdentity,
-        llm: LlmInterface,
+        llm: Box<dyn LlmBackend + 'static>,
         storage: Box<dyn ConversationStorage + 'static>,
     ) -> Assistant {
         Assistant(Arc::new(AssistantInner {
@@ -33,7 +32,7 @@ impl Assistant {
 
     /// 指定された `Conversation` が「完了」するまで処理する。
     pub async fn process_conversation(&self, conversation: &Conversation) -> Result<ConversationUpdate, error::Error> {
-        let update = self.0.llm.send(conversation).await?;
+        let update = self.0.llm.send_conversation(conversation).await?;
         let Some(response_text) = update.text else {
             return Err(error::Error::NoAssistantResponse);
         };
@@ -71,7 +70,7 @@ impl Assistant {
 
 #[derive(Debug)]
 struct AssistantInner {
-    llm: LlmInterface,
+    llm: Box<dyn LlmBackend + 'static>,
     storage: Box<dyn ConversationStorage + 'static>,
     system_role: String,
     sensitive_marker: String,

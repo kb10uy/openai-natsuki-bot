@@ -1,7 +1,7 @@
 use crate::{
-    application::config::AppConfigOpenai,
-    llm::{LlmUpdate, backend::Backend, error::Error, openai::create_openai_client},
-    model::{conversation::Conversation, message::Message},
+    impls::llm::openai::create_openai_client,
+    model::{config::AppConfigLlmOpenai, conversation::Conversation, message::Message},
+    specs::llm::{Error, LlmBackend, LlmUpdate},
 };
 
 use std::sync::Arc;
@@ -18,19 +18,19 @@ use futures::{FutureExt, future::BoxFuture};
 pub struct ChatCompletionBackend(Arc<ChatCompletionBackendInner>);
 
 impl ChatCompletionBackend {
-    pub async fn new(openai_config: &AppConfigOpenai) -> Result<ChatCompletionBackend, Error> {
-        let client = create_openai_client(openai_config).await?;
-        let model = openai_config.model.clone();
+    pub async fn new(config: &AppConfigLlmOpenai) -> Result<ChatCompletionBackend, Error> {
+        let client = create_openai_client(config).await?;
+        let model = config.model.clone();
 
         Ok(ChatCompletionBackend(Arc::new(ChatCompletionBackendInner {
             client,
             model,
-            max_token: openai_config.max_token,
+            max_token: config.max_token,
         })))
     }
 }
 
-impl Backend for ChatCompletionBackend {
+impl LlmBackend for ChatCompletionBackend {
     fn send_conversation<'a>(&'a self, conversation: &'a Conversation) -> BoxFuture<'a, Result<LlmUpdate, Error>> {
         let cloned = self.0.clone();
         async move { cloned.send_conversation(conversation).await }.boxed()

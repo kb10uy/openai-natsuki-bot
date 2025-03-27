@@ -1,5 +1,8 @@
-use super::{ConversationPlatform, error::Error};
-use crate::{assistant::Assistant, model::message::Message};
+use crate::{
+    assistant::Assistant,
+    model::message::Message,
+    specs::platform::{ConversationPlatform, Error},
+};
 
 use std::io::stdin;
 

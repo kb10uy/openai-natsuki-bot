@@ -1,8 +1,8 @@
 use crate::{
-    application::{config::AppConfigPlatformMastodon, constants::USER_AGENT},
+    USER_AGENT,
     assistant::Assistant,
-    model::message::Message,
-    platform::{ConversationPlatform, error::Error},
+    model::{config::AppConfigPlatformMastodon, message::Message},
+    specs::platform::{ConversationPlatform, Error},
 };
 
 use std::sync::{Arc, LazyLock};
@@ -38,7 +38,10 @@ impl MastodonPlatform {
             ..Default::default()
         };
         let mastodon = Mastodon::new(http_client, mastodon_data);
-        let self_account = mastodon.verify_credentials().await?;
+        let self_account = mastodon
+            .verify_credentials()
+            .map_err(|e| Error::PlatformSpecific(e.into()))
+            .await?;
 
         Ok(MastodonPlatform(Arc::new(MastodonPlatformInner {
             assistant,
@@ -66,9 +69,13 @@ struct MastodonPlatformInner {
 
 impl MastodonPlatformInner {
     async fn execute(self: Arc<Self>) -> Result<(), Error> {
-        let user_stream = self.mastodon.stream_user().await?;
+        let user_stream = self
+            .mastodon
+            .stream_user()
+            .map_err(|e| Error::PlatformSpecific(e.into()))
+            .await?;
         user_stream
-            .map_err(Error::Mastodon)
+            .map_err(|e| Error::PlatformSpecific(e.into()))
             .try_for_each(async |(e, _)| {
                 spawn(self.clone().process_event(e));
                 Ok(())
@@ -155,7 +162,11 @@ impl MastodonPlatformInner {
             spoiler_text: reply_spoiler,
             ..Default::default()
         };
-        let replied_status = self.mastodon.new_status(reply_status).await?;
+        let replied_status = self
+            .mastodon
+            .new_status(reply_status)
+            .map_err(|e| Error::PlatformSpecific(e.into()))
+            .await?;
 
         // Conversation/history の更新
         conversation.push_message(assistant_response.into());

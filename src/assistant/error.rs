@@ -7,7 +7,7 @@ pub enum Error {
     Llm(
         #[source]
         #[from]
-        crate::llm::error::Error,
+        crate::specs::llm::Error,
     ),
 
     /// 永続化層のエラー。
@@ -15,7 +15,7 @@ pub enum Error {
     Persistence(
         #[source]
         #[from]
-        crate::persistence::error::Error,
+        crate::specs::storage::Error,
     ),
 
     #[error("HTTP error: {0}")]
