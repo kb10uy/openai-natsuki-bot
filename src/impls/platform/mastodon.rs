@@ -1,8 +1,9 @@
 use crate::{
-    application::{config::AppConfigPlatformMastodon, constants::USER_AGENT},
+    USER_AGENT,
     assistant::Assistant,
-    model::message::Message,
-    platform::{ConversationPlatform, error::Error},
+    error::PlatformError,
+    model::{config::AppConfigPlatformMastodon, message::Message},
+    specs::platform::ConversationPlatform,
 };
 
 use std::sync::{Arc, LazyLock};
@@ -10,7 +11,7 @@ use std::sync::{Arc, LazyLock};
 use futures::{future::BoxFuture, prelude::*};
 use html2md::parse_html;
 use mastodon_async::{
-    Mastodon, NewStatus, Visibility,
+    Error as MastodonError, Mastodon, NewStatus, Visibility,
     entities::{account::Account, event::Event, notification::Type as NotificationType, status::Status},
 };
 use regex::Regex;
@@ -29,7 +30,7 @@ impl MastodonPlatform {
     pub async fn new(
         config_mastodon: &AppConfigPlatformMastodon,
         assistant: Assistant,
-    ) -> Result<MastodonPlatform, Error> {
+    ) -> Result<MastodonPlatform, PlatformError> {
         // Mastodon クライアントと自己アカウント情報
         let http_client = reqwest::ClientBuilder::new().user_agent(USER_AGENT).build()?;
         let mastodon_data = mastodon_async::Data {
@@ -50,7 +51,7 @@ impl MastodonPlatform {
 }
 
 impl ConversationPlatform for MastodonPlatform {
-    fn execute(&self) -> BoxFuture<'static, Result<(), Error>> {
+    fn execute(&self) -> BoxFuture<'static, Result<(), PlatformError>> {
         let cloned_inner = self.0.clone();
         cloned_inner.execute().boxed()
     }
@@ -65,10 +66,9 @@ struct MastodonPlatformInner {
 }
 
 impl MastodonPlatformInner {
-    async fn execute(self: Arc<Self>) -> Result<(), Error> {
+    async fn execute(self: Arc<Self>) -> Result<(), PlatformError> {
         let user_stream = self.mastodon.stream_user().await?;
         user_stream
-            .map_err(Error::Mastodon)
             .try_for_each(async |(e, _)| {
                 spawn(self.clone().process_event(e));
                 Ok(())
@@ -84,7 +84,7 @@ impl MastodonPlatformInner {
             Event::Notification(notification) => match notification.notification_type {
                 NotificationType::Mention => match notification.status {
                     Some(status) => self.process_status(status).await,
-                    None => Err(Error::ExpectationMismatch("mentioned status not found".into())),
+                    None => Err(PlatformError::ExpectationMismatch("mentioned status not found".into())),
                 },
                 _ => Ok(()),
             },
@@ -97,7 +97,7 @@ impl MastodonPlatformInner {
         error!("mastodon event process reported error: {err}");
     }
 
-    async fn process_status(&self, status: Status) -> Result<(), Error> {
+    async fn process_status(&self, status: Status) -> Result<(), PlatformError> {
         // フィルタリング(bot flag と自分には応答しない)
         if status.account.bot || status.account.id == self.self_account.id {
             return Ok(());
@@ -166,5 +166,11 @@ impl MastodonPlatformInner {
             .await?;
 
         Ok(())
+    }
+}
+
+impl From<MastodonError> for PlatformError {
+    fn from(value: MastodonError) -> Self {
+        PlatformError::External(value.into())
     }
 }

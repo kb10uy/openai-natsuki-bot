@@ -1,7 +1,7 @@
 use crate::{
-    application::config::AppConfigPersistence,
-    model::conversation::Conversation,
-    persistence::{ConversationStorage, error::Error},
+    error::StorageError,
+    model::{config::AppConfigStorageSqlite, conversation::Conversation},
+    specs::storage::ConversationStorage,
 };
 
 use std::sync::Arc;
@@ -14,8 +14,8 @@ use uuid::Uuid;
 pub struct SqliteConversationStorage(Arc<SqliteConversationStorageInner>);
 
 impl SqliteConversationStorage {
-    pub async fn new(config: &AppConfigPersistence) -> Result<SqliteConversationStorage, sqlx::Error> {
-        let pool = SqlitePool::connect(&config.database).await?;
+    pub async fn new(config: &AppConfigStorageSqlite) -> Result<SqliteConversationStorage, StorageError> {
+        let pool = SqlitePool::connect(&config.filepath.to_string_lossy()).await?;
         Ok(SqliteConversationStorage(Arc::new(SqliteConversationStorageInner {
             pool,
         })))
@@ -23,7 +23,7 @@ impl SqliteConversationStorage {
 }
 
 impl ConversationStorage for SqliteConversationStorage {
-    fn find_by_id<'a>(&'a self, id: &'a Uuid) -> BoxFuture<'a, Result<Option<Conversation>, Error>> {
+    fn find_by_id<'a>(&'a self, id: &'a Uuid) -> BoxFuture<'a, Result<Option<Conversation>, StorageError>> {
         async move { self.0.find_by_id(id).await }.boxed()
     }
 
@@ -31,7 +31,7 @@ impl ConversationStorage for SqliteConversationStorage {
         &'a self,
         platform: &'a str,
         context: &'a str,
-    ) -> BoxFuture<'a, Result<Option<Conversation>, Error>> {
+    ) -> BoxFuture<'a, Result<Option<Conversation>, StorageError>> {
         async move { self.0.find_by_platform_context(platform, context).await }.boxed()
     }
 
@@ -40,7 +40,7 @@ impl ConversationStorage for SqliteConversationStorage {
         conversation: &'a Conversation,
         platform: &'a str,
         new_context: &'a str,
-    ) -> BoxFuture<'a, Result<(), Error>> {
+    ) -> BoxFuture<'a, Result<(), StorageError>> {
         async move { self.0.upsert(conversation, platform, new_context).await }.boxed()
     }
 }
@@ -51,19 +51,22 @@ struct SqliteConversationStorageInner {
 }
 
 impl SqliteConversationStorageInner {
-    async fn find_by_id(&self, id: &Uuid) -> Result<Option<Conversation>, Error> {
+    async fn find_by_id(&self, id: &Uuid) -> Result<Option<Conversation>, StorageError> {
         let row: Option<SqliteRowConversation> =
             sqlx::query_as(r#"SELECT id, conversation_blob FROM conversations WHERE id = ?"#)
                 .bind(id)
                 .fetch_optional(&self.pool)
                 .await?;
 
-        row.map(|r| rmp_serde::from_slice(&r.conversation_blob))
-            .transpose()
-            .map_err(|e| Error::Serialization(e.to_string()))
+        let conversation = row.map(|r| rmp_serde::from_slice(&r.conversation_blob)).transpose()?;
+        Ok(conversation)
     }
 
-    async fn find_by_platform_context(&self, platform: &str, context: &str) -> Result<Option<Conversation>, Error> {
+    async fn find_by_platform_context(
+        &self,
+        platform: &str,
+        context: &str,
+    ) -> Result<Option<Conversation>, StorageError> {
         let platform_context_row = sqlx::query_as(
             r#"SELECT conversation_id, platform, context FROM platform_contexts WHERE platform = ? AND context = ?"#,
         )
@@ -78,8 +81,8 @@ impl SqliteConversationStorageInner {
         self.find_by_id(&conversation_id).await
     }
 
-    async fn upsert(&self, conversation: &Conversation, platform: &str, new_context: &str) -> Result<(), Error> {
-        let blob = rmp_serde::to_vec(conversation).map_err(|e| Error::Serialization(e.to_string()))?;
+    async fn upsert(&self, conversation: &Conversation, platform: &str, new_context: &str) -> Result<(), StorageError> {
+        let blob = rmp_serde::to_vec(conversation)?;
 
         sqlx::query(r#"INSERT INTO conversations (id, conversation_blob) VALUES (?, ?) ON CONFLICT DO UPDATE SET conversation_blob = excluded.conversation_blob;"#)
             .bind(conversation.id())

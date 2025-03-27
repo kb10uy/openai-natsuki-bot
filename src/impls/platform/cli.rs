@@ -1,5 +1,6 @@
-use super::{ConversationPlatform, error::Error};
-use crate::{assistant::Assistant, model::message::Message};
+use crate::{
+    assistant::Assistant, error::PlatformError, model::message::Message, specs::platform::ConversationPlatform,
+};
 
 use std::io::stdin;
 
@@ -18,7 +19,7 @@ pub struct CliPlatform {
 }
 
 impl ConversationPlatform for CliPlatform {
-    fn execute(&self) -> BoxFuture<'static, Result<(), Error>> {
+    fn execute(&self) -> BoxFuture<'static, Result<(), PlatformError>> {
         let assistant = self.assistant.clone();
 
         async move {

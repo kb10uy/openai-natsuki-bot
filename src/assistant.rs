@@ -1,14 +1,11 @@
-pub mod error;
-
 use crate::{
-    application::config::AppConfigAssistantIdentity,
-    assistant::error::Error,
-    llm::LlmInterface,
+    error::AssistantError,
     model::{
+        config::AppConfigAssistantIdentity,
         conversation::Conversation,
         message::{AssistantMessage, Message},
     },
-    persistence::ConversationStorage,
+    specs::{llm::Llm, storage::ConversationStorage},
 };
 
 use std::{fmt::Debug, sync::Arc};
@@ -20,7 +17,7 @@ pub struct Assistant(Arc<AssistantInner>);
 impl Assistant {
     pub fn new(
         assistant_identity: &AppConfigAssistantIdentity,
-        llm: LlmInterface,
+        llm: Box<dyn Llm + 'static>,
         storage: Box<dyn ConversationStorage + 'static>,
     ) -> Assistant {
         Assistant(Arc::new(AssistantInner {
@@ -32,10 +29,13 @@ impl Assistant {
     }
 
     /// 指定された `Conversation` が「完了」するまで処理する。
-    pub async fn process_conversation(&self, conversation: &Conversation) -> Result<ConversationUpdate, error::Error> {
-        let update = self.0.llm.send(conversation).await?;
+    pub async fn process_conversation(
+        &self,
+        conversation: &Conversation,
+    ) -> Result<ConversationUpdate, AssistantError> {
+        let update = self.0.llm.send_conversation(conversation).await?;
         let Some(response_text) = update.text else {
-            return Err(error::Error::NoAssistantResponse);
+            return Err(AssistantError::ChatResponseExpected);
         };
 
         let (text, is_sensitive) = match response_text.strip_prefix(&self.0.sensitive_marker) {
@@ -53,7 +53,11 @@ impl Assistant {
         Conversation::new_now(Some(system_message))
     }
 
-    pub async fn restore_conversation(&self, platform: &str, context: &str) -> Result<Option<Conversation>, Error> {
+    pub async fn restore_conversation(
+        &self,
+        platform: &str,
+        context: &str,
+    ) -> Result<Option<Conversation>, AssistantError> {
         let conversation = self.0.storage.find_by_platform_context(platform, context).await?;
         Ok(conversation)
     }
@@ -63,7 +67,7 @@ impl Assistant {
         conversation: &Conversation,
         platform: &str,
         context: &str,
-    ) -> Result<(), Error> {
+    ) -> Result<(), AssistantError> {
         self.0.storage.upsert(conversation, platform, context).await?;
         Ok(())
     }
@@ -71,7 +75,7 @@ impl Assistant {
 
 #[derive(Debug)]
 struct AssistantInner {
-    llm: LlmInterface,
+    llm: Box<dyn Llm + 'static>,
     storage: Box<dyn ConversationStorage + 'static>,
     system_role: String,
     sensitive_marker: String,

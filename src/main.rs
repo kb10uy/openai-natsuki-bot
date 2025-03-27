@@ -1,36 +1,44 @@
-mod application;
 mod assistant;
-mod llm;
+mod cli;
+mod error;
+mod impls;
 mod model;
-mod persistence;
-mod platform;
+mod specs;
 
 use crate::{
-    application::{cli::Arguments, config::load_config},
     assistant::Assistant,
-    llm::openai::create_openai_llm,
-    persistence::create_storage,
-    platform::{ConversationPlatform, cli::CliPlatform, mastodon::MastodonPlatform},
+    impls::{
+        llm::create_llm,
+        platform::{CliPlatform, MastodonPlatform},
+        storage::create_storage,
+    },
+    model::config::AppConfig,
+    specs::platform::ConversationPlatform,
 };
 
-use anyhow::{Result, bail};
+use std::path::Path;
+
+use anyhow::{Context as _, Result, bail};
 use clap::Parser;
 use futures::future::join_all;
-use tokio::spawn;
+use tokio::{fs::read_to_string, spawn};
 use tracing::info;
+
+/// クライアントに設定する UserAgent。
+pub const USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
 
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
-    let args = Arguments::parse();
+    let args = cli::Arguments::parse();
     let config = load_config(args.config).await?;
 
     let Some(assistant_identity) = config.assistant.identities.get(&config.assistant.identity) else {
         bail!("assistant identity {} not defined", config.assistant.identity);
     };
 
-    let llm = create_openai_llm(&config.openai).await?;
-    let storage = create_storage(&config.persistence).await?;
+    let llm = create_llm(&config.llm).await?;
+    let storage = create_storage(&config.storage).await?;
     let assistant = Assistant::new(assistant_identity, llm, storage);
 
     let mut platform_tasks = vec![];
@@ -54,4 +62,9 @@ async fn main() -> Result<()> {
 
     join_all(platform_tasks).await;
     Ok(())
+}
+
+async fn load_config(path: impl AsRef<Path>) -> Result<AppConfig> {
+    let config_str = read_to_string(path).await.context("failed to read config file")?;
+    toml::from_str(&config_str).context("failed to parse config")
 }
