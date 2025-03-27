@@ -1409,6 +1409,37 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "23fb14cb19457329c82206317a5663005a4d404783dc74f4252769b0d5f42856"
 
 [[package]]
+name = "llm-natsuki-bot"
+version = "0.2.0"
+dependencies = [
+ "anyhow",
+ "async-openai",
+ "bimap",
+ "clap",
+ "colored",
+ "futures",
+ "html2md",
+ "markdown",
+ "mastodon-async",
+ "mastodon-async-entities",
+ "pin-project",
+ "regex",
+ "reqwest",
+ "rmp-serde",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.12",
+ "tokio",
+ "tokio-stream",
+ "toml",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+ "uuid",
+]
+
+[[package]]
 name = "lock_api"
 version = "0.4.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1684,37 +1715,6 @@ name = "once_cell"
 version = "1.21.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d75b0bedcc4fe52caa0e03d9f1151a323e4aa5e2d78ba3580400cd3c9e2bc4bc"
-
-[[package]]
-name = "openai-natsuki-bot"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-openai",
- "bimap",
- "clap",
- "colored",
- "futures",
- "html2md",
- "markdown",
- "mastodon-async",
- "mastodon-async-entities",
- "pin-project",
- "regex",
- "reqwest",
- "rmp-serde",
- "serde",
- "serde_json",
- "sqlx",
- "thiserror 2.0.12",
- "tokio",
- "tokio-stream",
- "toml",
- "tracing",
- "tracing-subscriber",
- "url",
- "uuid",
-]
 
 [[package]]
 name = "openssl"
