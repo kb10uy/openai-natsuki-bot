@@ -1,7 +1,7 @@
 use crate::{
     error::FunctionError,
     model::schema::DescribedSchema,
-    specs::function::simple::{SimpleFunction, SimpleFunctionDescriptor},
+    specs::function::simple::{SimpleFunction, SimpleFunctionDescriptor, SimpleFunctionResponse},
 };
 
 use futures::{FutureExt, future::BoxFuture};
@@ -31,7 +31,7 @@ impl SimpleFunction for LocalInfo {
         }
     }
 
-    fn call<'a>(&'a self, _id: &str, _params: Value) -> BoxFuture<'a, Result<Value, FunctionError>> {
+    fn call<'a>(&'a self, _id: &str, _params: Value) -> BoxFuture<'a, Result<SimpleFunctionResponse, FunctionError>> {
         async { self.get_info() }.boxed()
     }
 }
@@ -43,12 +43,15 @@ impl LocalInfo {
         })
     }
 
-    fn get_info(&self) -> Result<Value, FunctionError> {
+    fn get_info(&self) -> Result<SimpleFunctionResponse, FunctionError> {
         let now = OffsetDateTime::now_local()?;
-        Ok(json!({
-            "time_now": now.format(&Rfc3339)?,
-            "bot_started_at": self.started_at.format(&Rfc3339)?,
-        }))
+        Ok(SimpleFunctionResponse {
+            result: json!({
+                "time_now": now.format(&Rfc3339)?,
+                "bot_started_at": self.started_at.format(&Rfc3339)?,
+            }),
+            ..Default::default()
+        })
     }
 }
 

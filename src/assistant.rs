@@ -2,7 +2,7 @@ use crate::{
     error::AssistantError,
     model::{
         config::AppConfigAssistantIdentity,
-        conversation::{Conversation, ConversationUpdate, IncompleteConversation},
+        conversation::{Conversation, ConversationAttachment, ConversationUpdate, IncompleteConversation},
         message::{AssistantMessage, FunctionResponseMessage, Message, MessageFunctionCall, UserMessage},
     },
     specs::{function::simple::SimpleFunction, llm::Llm, storage::ConversationStorage},
@@ -49,20 +49,20 @@ impl Assistant {
     ) -> Result<ConversationUpdate, AssistantError> {
         let mut incomplete_conversation = IncompleteConversation::start(conversation, user_message);
 
-        // 1 回目の呼出しで tool calling を判定する
         let first_update = self.0.llm.send_conversation(&incomplete_conversation).await?;
-        let assistant_update = if let Some(tool_callings) = first_update.tool_callings {
+        let (assistant_update, attachments) = if let Some(tool_callings) = first_update.tool_callings {
             let call_message = Message::new_function_calls(tool_callings.clone());
-            let response_messages = self.process_tool_callings(tool_callings).await?;
+            let (response_messages, attachments) = self.process_tool_callings(tool_callings).await?;
 
             incomplete_conversation.latest_messages.push(call_message);
             incomplete_conversation
                 .latest_messages
                 .extend(response_messages.into_iter().map(|m| m.into()));
 
-            self.0.llm.send_conversation(&incomplete_conversation).await?
+            let second_update = self.0.llm.send_conversation(&incomplete_conversation).await?;
+            (second_update, attachments)
         } else {
-            first_update
+            (first_update, vec![])
         };
 
         let Some(response) = assistant_update.response else {
@@ -78,11 +78,14 @@ impl Assistant {
             },
         };
 
-        Ok(incomplete_conversation.finish(AssistantMessage {
-            text,
-            is_sensitive,
-            language: response.language,
-        }))
+        Ok(incomplete_conversation.finish(
+            AssistantMessage {
+                text,
+                is_sensitive,
+                language: response.language,
+            },
+            attachments,
+        ))
     }
 
     /// 新しい `Conversation` を現在時刻の ID で初期化する。
@@ -113,10 +116,11 @@ impl Assistant {
     async fn process_tool_callings(
         &self,
         tool_callings: Vec<MessageFunctionCall>,
-    ) -> Result<Vec<FunctionResponseMessage>, AssistantError> {
+    ) -> Result<(Vec<FunctionResponseMessage>, Vec<ConversationAttachment>), AssistantError> {
         let locked = self.0.simple_functions.lock().await;
 
         let mut responses = vec![];
+        let mut attachments = vec![];
         for tool_calling in tool_callings {
             info!("calling tool {} (id: {})", tool_calling.name, tool_calling.id);
             // MCP と複合するのをあとで考える
@@ -128,11 +132,12 @@ impl Assistant {
             responses.push(FunctionResponseMessage {
                 id: tool_calling.id,
                 name: tool_calling.name,
-                result,
+                result: result.result,
             });
+            attachments.extend(result.attachments);
         }
 
-        Ok(responses)
+        Ok((responses, attachments))
     }
 }
 

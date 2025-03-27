@@ -1,7 +1,7 @@
 use crate::{
     error::FunctionError,
     model::schema::DescribedSchema,
-    specs::function::simple::{SimpleFunction, SimpleFunctionDescriptor},
+    specs::function::simple::{SimpleFunction, SimpleFunctionDescriptor, SimpleFunctionResponse},
 };
 
 use futures::{FutureExt, future::BoxFuture};
@@ -25,7 +25,7 @@ impl SimpleFunction for SelfInfo {
         }
     }
 
-    fn call<'a>(&'a self, _id: &str, _params: Value) -> BoxFuture<'a, Result<Value, FunctionError>> {
+    fn call<'a>(&'a self, _id: &str, _params: Value) -> BoxFuture<'a, Result<SimpleFunctionResponse, FunctionError>> {
         async { self.get_info() }.boxed()
     }
 }
@@ -35,11 +35,14 @@ impl SelfInfo {
         SelfInfo {}
     }
 
-    fn get_info(&self) -> Result<Value, FunctionError> {
-        Ok(json!({
-            "bot_version": env!("CARGO_PKG_VERSION"),
-            "bot_commit": env!("GIT_COMMIT_HASH"),
-            "bot_binary_built_at": env!("BUILT_AT_DATETIME"),
-        }))
+    fn get_info(&self) -> Result<SimpleFunctionResponse, FunctionError> {
+        Ok(SimpleFunctionResponse {
+            result: json!({
+                "bot_version": env!("CARGO_PKG_VERSION"),
+                "bot_commit": env!("GIT_COMMIT_HASH"),
+                "bot_binary_built_at": env!("BUILT_AT_DATETIME"),
+            }),
+            ..Default::default()
+        })
     }
 }
