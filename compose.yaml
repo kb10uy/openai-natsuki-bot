@@ -1,0 +1,7 @@
+services:
+  bot:
+    build: "."
+    user: "1000:1000"
+    volumes:
+      - "./config.toml:/config.toml"
+      - "./conversations.sqlite3:/conversations.sqlite3"
