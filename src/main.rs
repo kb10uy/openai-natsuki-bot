@@ -1,5 +1,6 @@
 mod assistant;
 mod cli;
+mod error;
 mod impls;
 mod model;
 mod specs;

@@ -1,7 +1,8 @@
 use crate::{
+    error::LlmError,
     impls::llm::openai::create_openai_client,
     model::{config::AppConfigLlmOpenai, conversation::Conversation},
-    specs::llm::{Error, LlmBackend, LlmUpdate},
+    specs::llm::{Llm, LlmUpdate},
 };
 
 use std::sync::Arc;
@@ -14,7 +15,7 @@ use futures::{FutureExt, future::BoxFuture};
 pub struct ResponsesBackend(Arc<ResponsesBackendInner>);
 
 impl ResponsesBackend {
-    pub async fn new(config: &AppConfigLlmOpenai) -> Result<ResponsesBackend, Error> {
+    pub async fn new(config: &AppConfigLlmOpenai) -> Result<ResponsesBackend, LlmError> {
         let client = create_openai_client(config).await?;
         let model = config.model.clone();
 
@@ -22,8 +23,8 @@ impl ResponsesBackend {
     }
 }
 
-impl LlmBackend for ResponsesBackend {
-    fn send_conversation<'a>(&'a self, conversation: &'a Conversation) -> BoxFuture<'a, Result<LlmUpdate, Error>> {
+impl Llm for ResponsesBackend {
+    fn send_conversation<'a>(&'a self, conversation: &'a Conversation) -> BoxFuture<'a, Result<LlmUpdate, LlmError>> {
         let cloned = self.0.clone();
         async move { cloned.send_conversation(conversation).await }.boxed()
     }
@@ -37,7 +38,7 @@ struct ResponsesBackendInner {
 }
 
 impl ResponsesBackendInner {
-    async fn send_conversation(&self, _conversation: &Conversation) -> Result<LlmUpdate, Error> {
+    async fn send_conversation(&self, _conversation: &Conversation) -> Result<LlmUpdate, LlmError> {
         todo!();
     }
 }

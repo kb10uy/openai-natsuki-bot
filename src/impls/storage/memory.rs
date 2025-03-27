@@ -1,7 +1,4 @@
-use crate::{
-    model::conversation::Conversation,
-    specs::storage::{ConversationStorage, Error},
-};
+use crate::{error::StorageError, model::conversation::Conversation, specs::storage::ConversationStorage};
 
 use std::{collections::HashMap, sync::Arc};
 
@@ -23,7 +20,7 @@ impl MemoryConversationStorage {
 }
 
 impl ConversationStorage for MemoryConversationStorage {
-    fn find_by_id<'a>(&'a self, id: &'a Uuid) -> BoxFuture<'a, Result<Option<Conversation>, Error>> {
+    fn find_by_id<'a>(&'a self, id: &'a Uuid) -> BoxFuture<'a, Result<Option<Conversation>, StorageError>> {
         async move { self.0.find_by_id(id).await }.boxed()
     }
 
@@ -31,7 +28,7 @@ impl ConversationStorage for MemoryConversationStorage {
         &'a self,
         platform: &'a str,
         context: &'a str,
-    ) -> BoxFuture<'a, Result<Option<Conversation>, Error>> {
+    ) -> BoxFuture<'a, Result<Option<Conversation>, StorageError>> {
         async move { self.0.find_by_platform_context(platform, context).await }.boxed()
     }
 
@@ -40,7 +37,7 @@ impl ConversationStorage for MemoryConversationStorage {
         conversation: &'a Conversation,
         platform: &'a str,
         new_context: &'a str,
-    ) -> BoxFuture<'a, Result<(), Error>> {
+    ) -> BoxFuture<'a, Result<(), StorageError>> {
         async move { self.0.upsert(conversation, platform, new_context).await }.boxed()
     }
 }
@@ -52,12 +49,16 @@ struct MemoryConversationStorageInner {
 }
 
 impl MemoryConversationStorageInner {
-    async fn find_by_id(&self, id: &Uuid) -> Result<Option<Conversation>, Error> {
+    async fn find_by_id(&self, id: &Uuid) -> Result<Option<Conversation>, StorageError> {
         let locked = self.conversations.lock().await;
         Ok(locked.get(id).cloned())
     }
 
-    async fn find_by_platform_context(&self, platform: &str, context: &str) -> Result<Option<Conversation>, Error> {
+    async fn find_by_platform_context(
+        &self,
+        platform: &str,
+        context: &str,
+    ) -> Result<Option<Conversation>, StorageError> {
         let locked_conv = self.conversations.lock().await;
         let locked_pc = self.platform_contexts.lock().await;
 
@@ -68,7 +69,7 @@ impl MemoryConversationStorageInner {
         Ok(conversation)
     }
 
-    async fn upsert(&self, conversation: &Conversation, platform: &str, new_context: &str) -> Result<(), Error> {
+    async fn upsert(&self, conversation: &Conversation, platform: &str, new_context: &str) -> Result<(), StorageError> {
         let mut locked_conv = self.conversations.lock().await;
         let mut locked_pc = self.platform_contexts.lock().await;
 

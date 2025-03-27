@@ -4,11 +4,11 @@ mod responses;
 pub use chat_completion::ChatCompletionBackend;
 pub use responses::ResponsesBackend;
 
-use crate::{USER_AGENT, model::config::AppConfigLlmOpenai, specs::llm::Error};
+use crate::{USER_AGENT, error::LlmError, model::config::AppConfigLlmOpenai};
 
 use async_openai::{Client, config::OpenAIConfig};
 
-async fn create_openai_client(openai_config: &AppConfigLlmOpenai) -> Result<Client<OpenAIConfig>, Error> {
+async fn create_openai_client(openai_config: &AppConfigLlmOpenai) -> Result<Client<OpenAIConfig>, LlmError> {
     let config = OpenAIConfig::new()
         .with_api_key(&openai_config.token)
         .with_api_base(&openai_config.endpoint);
