@@ -37,9 +37,9 @@ impl SelfInfo {
 
     fn get_info(&self) -> Result<Value, FunctionError> {
         Ok(json!({
-            "version": env!("CARGO_PKG_VERSION"),
-            "commit": env!("GIT_COMMIT_HASH"),
-            "built_at": env!("BUILT_AT_DATETIME"),
+            "bot_version": env!("CARGO_PKG_VERSION"),
+            "bot_commit": env!("GIT_COMMIT_HASH"),
+            "bot_binary_built_at": env!("BUILT_AT_DATETIME"),
         }))
     }
 }

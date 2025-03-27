@@ -20,7 +20,7 @@ pub struct LocalInfo {
 impl SimpleFunction for LocalInfo {
     fn get_descriptor(&self) -> SimpleFunctionDescriptor {
         SimpleFunctionDescriptor {
-            name: "self_info".to_string(),
+            name: "local_info".to_string(),
             description: r#"
                 この bot が動作している環境に関する以下の情報を提供する。
                 - 現在時刻

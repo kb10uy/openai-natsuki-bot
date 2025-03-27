@@ -11,7 +11,7 @@ use crate::{
 use std::{collections::HashMap, fmt::Debug, sync::Arc};
 
 use tokio::sync::Mutex;
-use tracing::warn;
+use tracing::{info, warn};
 
 /// 各種アシスタント動作の抽象化レイヤー。
 #[derive(Debug, Clone)]
@@ -118,6 +118,7 @@ impl Assistant {
 
         let mut responses = vec![];
         for tool_calling in tool_callings {
+            info!("calling tool {} (id: {})", tool_calling.name, tool_calling.id);
             // MCP と複合するのをあとで考える
             let Some(simple_function) = locked.get(&tool_calling.name) else {
                 warn!("tool {} not found, skipping", tool_calling.name);
