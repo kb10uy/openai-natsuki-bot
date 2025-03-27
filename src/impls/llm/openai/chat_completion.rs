@@ -1,7 +1,11 @@
 use crate::{
     error::LlmError,
-    impls::llm::openai::create_openai_client,
-    model::{config::AppConfigLlmOpenai, conversation::Conversation, message::Message},
+    impls::llm::openai::{RESPONSE_JSON_SCHEMA, create_openai_client},
+    model::{
+        config::AppConfigLlmOpenai,
+        conversation::{Conversation, StructuredResponse},
+        message::Message,
+    },
     specs::llm::{Llm, LlmUpdate},
 };
 
@@ -10,7 +14,9 @@ use std::sync::Arc;
 use async_openai::{
     Client,
     config::OpenAIConfig,
-    types::{ChatCompletionRequestFunctionMessage, ChatCompletionRequestMessage, CreateChatCompletionRequest},
+    types::{
+        ChatCompletionRequestFunctionMessage, ChatCompletionRequestMessage, CreateChatCompletionRequest, ResponseFormat,
+    },
 };
 use futures::{FutureExt, future::BoxFuture};
 
@@ -51,17 +57,34 @@ impl ChatCompletionBackendInner {
         let request = CreateChatCompletionRequest {
             messages,
             model: self.model.clone(),
+            response_format: Some(ResponseFormat::JsonSchema {
+                json_schema: RESPONSE_JSON_SCHEMA.clone(),
+            }),
             max_completion_tokens: Some(self.max_token as u32),
             ..Default::default()
         };
 
-        let response = self.client.chat().create(request).await?;
-        let Some(first_choice) = response.choices.first() else {
+        let openai_response = self.client.chat().create(request).await?;
+        let Some(first_choice) = openai_response.choices.into_iter().next() else {
             return Err(LlmError::NoChoice);
         };
 
+        /*
+        let response = first_choice
+            .message
+            .content
+            .map(|s| serde_json::from_str(&s))
+            .transpose()
+            .map_err(|e| LlmError::Backend(e.into()))?;
+        */
         let update = LlmUpdate {
-            text: first_choice.message.content.clone(),
+            // TODO: de しろ
+            // response,
+            response: Some(StructuredResponse {
+                text: first_choice.message.content.unwrap_or_default(),
+                language: "ja".into(),
+                sensitive: false,
+            }),
         };
         Ok(update)
     }

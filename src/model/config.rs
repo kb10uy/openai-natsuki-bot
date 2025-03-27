@@ -94,5 +94,4 @@ pub struct AppConfigAssistant {
 #[derive(Debug, Clone, Deserialize)]
 pub struct AppConfigAssistantIdentity {
     pub system_role: String,
-    pub sensitive_marker: String,
 }
