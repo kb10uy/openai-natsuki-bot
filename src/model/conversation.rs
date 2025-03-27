@@ -42,11 +42,10 @@ impl Conversation {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct StructuredResponse {
+pub struct ConversationUserInput {
     pub text: String,
-    pub language: Option<String>,
-    pub sensitive: Option<bool>,
 }
+
 
 // MEMO: proc macro で serde のついでに作った方が面白い
 pub static ASSISTANT_RESPONSE_SCHEMA: LazyLock<DescribedSchema> = LazyLock::new(|| {

@@ -1,14 +1,10 @@
 use crate::{
     error::LlmError,
     impls::llm::{RESPONSE_JSON_SCHEMA, convert_json_schema, openai::create_openai_client},
-    model::{
-        config::AppConfigLlmOpenai,
-        conversation::{Conversation, StructuredResponse},
-        message::Message,
-    },
+    model::{config::AppConfigLlmOpenai, conversation::Conversation, message::Message},
     specs::{
         function::simple::SimpleFunctionDescriptor,
-        llm::{Llm, LlmToolCalling, LlmUpdate},
+        llm::{Llm, LlmAssistantResponse, LlmToolCalling, LlmUpdate},
     },
 };
 
@@ -126,7 +122,7 @@ impl ChatCompletionBackendInner {
         };
 
         let update = LlmUpdate {
-            response: first_choice.message.content.map(|text| StructuredResponse {
+            response: first_choice.message.content.map(|text| LlmAssistantResponse {
                 text,
                 language: None,
                 sensitive: None,

@@ -1,12 +1,9 @@
-use crate::{
-    error::LlmError,
-    model::conversation::{Conversation, StructuredResponse},
-    specs::function::simple::SimpleFunctionDescriptor,
-};
+use crate::{error::LlmError, model::conversation::Conversation, specs::function::simple::SimpleFunctionDescriptor};
 
 use std::fmt::Debug;
 
 use futures::future::BoxFuture;
+use serde::Deserialize;
 use serde_json::Value;
 
 #[allow(dead_code)]
@@ -21,8 +18,16 @@ pub trait Llm: Send + Sync + Debug {
 /// Conversation を送信した結果生成された内容。
 #[derive(Debug, Clone)]
 pub struct LlmUpdate {
-    pub response: Option<StructuredResponse>,
+    pub response: Option<LlmAssistantResponse>,
     pub tool_callings: Option<Vec<LlmToolCalling>>,
+}
+
+/// assistant role としての応答内容。
+#[derive(Debug, Clone, Deserialize)]
+pub struct LlmAssistantResponse {
+    pub text: String,
+    pub language: Option<String>,
+    pub sensitive: Option<bool>,
 }
 
 /// Conversation を送信した結果生成された内容。
