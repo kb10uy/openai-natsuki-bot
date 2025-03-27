@@ -24,6 +24,7 @@ impl Assistant {
             llm,
             storage,
             system_role: assistant_identity.system_role.clone(),
+            sensitive_marker: assistant_identity.sensitive_marker.clone(),
         }))
     }
 
@@ -37,10 +38,19 @@ impl Assistant {
             return Err(AssistantError::ChatResponseExpected);
         };
 
+        let (text, is_sensitive) = match response.sensitive {
+            Some(v) => (response.text, v),
+            None if self.0.sensitive_marker.is_empty() => (response.text, false),
+            _ => match response.text.strip_prefix(&self.0.sensitive_marker) {
+                Some(stripped) => (stripped.to_string(), true),
+                None => (response.text, false),
+            },
+        };
+
         let assistant_response = AssistantMessage {
-            text: response.text,
-            is_sensitive: response.sensitive,
-            language: Some(response.language),
+            text,
+            is_sensitive,
+            language: response.language,
         };
 
         Ok(ConversationUpdate { assistant_response })
@@ -77,6 +87,7 @@ struct AssistantInner {
     llm: Box<dyn Llm + 'static>,
     storage: Box<dyn ConversationStorage + 'static>,
     system_role: String,
+    sensitive_marker: String,
 }
 
 #[derive(Debug, Clone)]

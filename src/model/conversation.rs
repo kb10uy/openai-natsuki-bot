@@ -1,4 +1,6 @@
-use crate::model::message::Message;
+use std::sync::LazyLock;
+
+use crate::model::{message::Message, schema::DescribedSchema};
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -42,6 +44,22 @@ impl Conversation {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StructuredResponse {
     pub text: String,
-    pub language: String,
-    pub sensitive: bool,
+    pub language: Option<String>,
+    pub sensitive: Option<bool>,
 }
+
+// MEMO: proc macro で serde のついでに作った方が面白い
+pub static ASSISTANT_RESPONSE_SCHEMA: LazyLock<DescribedSchema> = LazyLock::new(|| {
+    DescribedSchema::object(
+        "response",
+        "response as assistant",
+        vec![
+            DescribedSchema::string(
+                "text",
+                "ユーザーへの主要な回答内容。夏稀としてふるまって回答してください。",
+            ),
+            DescribedSchema::string("language", "`text` フィールドに対応する IETF BCP47 言語タグ。"),
+            DescribedSchema::boolean("sensitive", "`text` フィールドが性的な話題を含むかどうか。"),
+        ],
+    )
+});

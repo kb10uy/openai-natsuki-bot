@@ -1,7 +1,11 @@
 use crate::{
     error::LlmError,
-    impls::llm::openai::create_openai_client,
-    model::{config::AppConfigLlmOpenai, conversation::Conversation, message::Message},
+    impls::llm::{RESPONSE_JSON_SCHEMA, openai::create_openai_client},
+    model::{
+        config::AppConfigLlmOpenai,
+        conversation::{Conversation, StructuredResponse},
+        message::Message,
+    },
     specs::llm::{Llm, LlmUpdate},
 };
 
@@ -12,7 +16,7 @@ use async_openai::{
     config::OpenAIConfig,
     types::{
         ChatCompletionRequestFunctionMessage, ChatCompletionRequestMessage, ChatCompletionRequestUserMessage,
-        ChatCompletionRequestUserMessageContent, CreateChatCompletionRequest,
+        ChatCompletionRequestUserMessageContent, CreateChatCompletionRequest, ResponseFormat,
     },
 };
 use futures::{FutureExt, future::BoxFuture};
@@ -30,6 +34,7 @@ impl ChatCompletionBackend {
             client,
             model,
             max_token: config.max_token,
+            structured_mode: config.use_structured_output,
         })))
     }
 }
@@ -46,15 +51,55 @@ struct ChatCompletionBackendInner {
     client: Client<OpenAIConfig>,
     model: String,
     max_token: usize,
+    structured_mode: bool,
 }
 
 impl ChatCompletionBackendInner {
     async fn send_conversation(&self, conversation: &Conversation) -> Result<LlmUpdate, LlmError> {
         let messages = conversation.messages().iter().map(transform_message).collect();
-        // 本当は json_schema/json_mode を使いたいが様々な事情により素のテキストで JSON が返ってくることを期待する
+        if self.structured_mode {
+            self.send_conversation_structured(messages).await
+        } else {
+            self.send_conversation_normal(messages).await
+        }
+    }
+
+    async fn send_conversation_normal(
+        &self,
+        messages: Vec<ChatCompletionRequestMessage>,
+    ) -> Result<LlmUpdate, LlmError> {
         let request = CreateChatCompletionRequest {
             messages,
             model: self.model.clone(),
+            max_completion_tokens: Some(self.max_token as u32),
+            ..Default::default()
+        };
+
+        let openai_response = self.client.chat().create(request).await?;
+        let Some(first_choice) = openai_response.choices.into_iter().next() else {
+            return Err(LlmError::NoChoice);
+        };
+
+        let update = LlmUpdate {
+            response: first_choice.message.content.map(|text| StructuredResponse {
+                text,
+                language: None,
+                sensitive: None,
+            }),
+        };
+        Ok(update)
+    }
+
+    async fn send_conversation_structured(
+        &self,
+        messages: Vec<ChatCompletionRequestMessage>,
+    ) -> Result<LlmUpdate, LlmError> {
+        let request = CreateChatCompletionRequest {
+            messages,
+            model: self.model.clone(),
+            response_format: Some(ResponseFormat::JsonSchema {
+                json_schema: RESPONSE_JSON_SCHEMA.clone(),
+            }),
             max_completion_tokens: Some(self.max_token as u32),
             ..Default::default()
         };
