@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct FunctionDescriptor {
+pub struct SimpleFunctionDescriptor {
     pub name: String,
     pub description: String,
     pub parameters: DescribedSchema,
@@ -15,7 +15,7 @@ pub struct FunctionDescriptor {
 
 pub trait SimpleFunction: Send + Sync + Debug {
     /// この `SimpleFunction` のディスクリプタを返す。
-    fn get_descriptor(&self) -> FunctionDescriptor;
+    fn get_descriptor(&self) -> SimpleFunctionDescriptor;
 
     /// Function を実行する。
     fn call<'a>(&'a self, id: &str, params: Value) -> BoxFuture<'a, Result<String, FunctionError>>;

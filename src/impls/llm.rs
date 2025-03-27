@@ -39,7 +39,7 @@ impl From<ReqwestError> for LlmError {
     }
 }
 
-fn convert_schema(schema: &DescribedSchema) -> JsonValue {
+fn convert_json_schema(schema: &DescribedSchema) -> JsonValue {
     match &schema.field_type {
         DescribedSchemaType::Integer => json!({
             "type": "integer",
@@ -58,7 +58,10 @@ fn convert_schema(schema: &DescribedSchema) -> JsonValue {
             "description": schema.description,
         }),
         DescribedSchemaType::Object(fields) => {
-            let properties: HashMap<_, _> = fields.iter().map(|f| (f.name.clone(), convert_schema(f))).collect();
+            let properties: HashMap<_, _> = fields
+                .iter()
+                .map(|f| (f.name.clone(), convert_json_schema(f)))
+                .collect();
             let keys: Vec<_> = properties.keys().cloned().collect();
             json!({
                 "type": "object",
@@ -73,6 +76,6 @@ fn convert_schema(schema: &DescribedSchema) -> JsonValue {
 static RESPONSE_JSON_SCHEMA: LazyLock<ResponseFormatJsonSchema> = LazyLock::new(|| ResponseFormatJsonSchema {
     name: "response".into(),
     description: Some("response from assistant".into()),
-    schema: Some(convert_schema(&ASSISTANT_RESPONSE_SCHEMA)),
+    schema: Some(convert_json_schema(&ASSISTANT_RESPONSE_SCHEMA)),
     strict: Some(true),
 });

@@ -2,7 +2,10 @@ use crate::{
     error::LlmError,
     impls::llm::openai::create_openai_client,
     model::{config::AppConfigLlmOpenai, conversation::Conversation},
-    specs::llm::{Llm, LlmUpdate},
+    specs::{
+        function::simple::SimpleFunctionDescriptor,
+        llm::{Llm, LlmUpdate},
+    },
 };
 
 use std::sync::Arc;
@@ -24,6 +27,10 @@ impl ResponsesBackend {
 }
 
 impl Llm for ResponsesBackend {
+    fn add_simple_function(&self, _descriptor: SimpleFunctionDescriptor) -> BoxFuture<'_, ()> {
+        todo!()
+    }
+
     fn send_conversation<'a>(&'a self, conversation: &'a Conversation) -> BoxFuture<'a, Result<LlmUpdate, LlmError>> {
         let cloned = self.0.clone();
         async move { cloned.send_conversation(conversation).await }.boxed()

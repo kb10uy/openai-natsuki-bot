@@ -1,12 +1,15 @@
 use crate::{
     error::LlmError,
-    impls::llm::{RESPONSE_JSON_SCHEMA, openai::create_openai_client},
+    impls::llm::{RESPONSE_JSON_SCHEMA, convert_json_schema, openai::create_openai_client},
     model::{
         config::AppConfigLlmOpenai,
         conversation::{Conversation, StructuredResponse},
         message::Message,
     },
-    specs::llm::{Llm, LlmUpdate},
+    specs::{
+        function::simple::SimpleFunctionDescriptor,
+        llm::{Llm, LlmUpdate},
+    },
 };
 
 use std::sync::Arc;
@@ -16,10 +19,12 @@ use async_openai::{
     config::OpenAIConfig,
     types::{
         ChatCompletionRequestFunctionMessage, ChatCompletionRequestMessage, ChatCompletionRequestUserMessage,
-        ChatCompletionRequestUserMessageContent, CreateChatCompletionRequest, ResponseFormat,
+        ChatCompletionRequestUserMessageContent, ChatCompletionTool, CreateChatCompletionRequest, FunctionObject,
+        ResponseFormat,
     },
 };
 use futures::{FutureExt, future::BoxFuture};
+use tokio::sync::Mutex;
 
 /// OpenAI Chat Completion API を利用したバックエンド。
 #[derive(Debug, Clone)]
@@ -32,6 +37,7 @@ impl ChatCompletionBackend {
 
         Ok(ChatCompletionBackend(Arc::new(ChatCompletionBackendInner {
             client,
+            tools: Mutex::new(vec![]),
             model,
             max_token: config.max_token,
             structured_mode: config.use_structured_output,
@@ -40,6 +46,10 @@ impl ChatCompletionBackend {
 }
 
 impl Llm for ChatCompletionBackend {
+    fn add_simple_function(&self, descriptor: SimpleFunctionDescriptor) -> BoxFuture<'_, ()> {
+        async { self.0.add_simple_function(descriptor).await }.boxed()
+    }
+
     fn send_conversation<'a>(&'a self, conversation: &'a Conversation) -> BoxFuture<'a, Result<LlmUpdate, LlmError>> {
         let cloned = self.0.clone();
         async move { cloned.send_conversation(conversation).await }.boxed()
@@ -49,12 +59,28 @@ impl Llm for ChatCompletionBackend {
 #[derive(Debug)]
 struct ChatCompletionBackendInner {
     client: Client<OpenAIConfig>,
+    tools: Mutex<Vec<ChatCompletionTool>>,
     model: String,
     max_token: usize,
     structured_mode: bool,
 }
 
 impl ChatCompletionBackendInner {
+    async fn add_simple_function(&self, descriptor: SimpleFunctionDescriptor) {
+        let tool = ChatCompletionTool {
+            function: FunctionObject {
+                name: descriptor.name,
+                description: Some(descriptor.description),
+                parameters: Some(convert_json_schema(&descriptor.parameters)),
+                strict: Some(true),
+            },
+            ..Default::default()
+        };
+
+        let mut locked = self.tools.lock().await;
+        locked.push(tool);
+    }
+
     async fn send_conversation(&self, conversation: &Conversation) -> Result<LlmUpdate, LlmError> {
         let messages = conversation.messages().iter().map(transform_message).collect();
         if self.structured_mode {
@@ -70,6 +96,7 @@ impl ChatCompletionBackendInner {
     ) -> Result<LlmUpdate, LlmError> {
         let request = CreateChatCompletionRequest {
             messages,
+            tools: Some(self.tools.lock().await.clone()),
             model: self.model.clone(),
             max_completion_tokens: Some(self.max_token as u32),
             ..Default::default()

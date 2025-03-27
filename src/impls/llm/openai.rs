@@ -4,7 +4,11 @@ mod responses;
 pub use chat_completion::ChatCompletionBackend;
 pub use responses::ResponsesBackend;
 
-use crate::{USER_AGENT, error::LlmError, model::config::AppConfigLlmOpenai};
+use crate::{
+    USER_AGENT,
+    error::LlmError,
+    model::config::AppConfigLlmOpenai,
+};
 
 use async_openai::{Client, config::OpenAIConfig};
 
