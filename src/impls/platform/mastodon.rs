@@ -4,6 +4,7 @@ use crate::{
     error::PlatformError,
     model::{config::AppConfigPlatformMastodon, message::Message},
     specs::platform::ConversationPlatform,
+    text::markdown::sanitize_markdown_mastodon,
 };
 
 use std::sync::{Arc, LazyLock};
@@ -46,6 +47,7 @@ impl MastodonPlatform {
             mastodon,
             self_account,
             sensitive_spoiler: config_mastodon.sensitive_spoiler.clone(),
+            max_length: config_mastodon.max_length,
         })))
     }
 }
@@ -63,6 +65,7 @@ struct MastodonPlatformInner {
     mastodon: Mastodon,
     self_account: Account,
     sensitive_spoiler: String,
+    max_length: usize,
 }
 
 impl MastodonPlatformInner {
@@ -143,7 +146,12 @@ impl MastodonPlatformInner {
         // リプライ構築
         // 公開範囲は最大 unlisted でリプライ元に合わせる
         // CW はリプライ元があったらそのまま、ないときは要そぎぎなら付与
-        let reply_text = format!("@{} {}", status.account.acct, assistant_response.text);
+        let mut sanitized_text = sanitize_markdown_mastodon(&assistant_response.text);
+        if sanitized_text.chars().count() > self.max_length {
+            sanitized_text = sanitized_text.chars().take(self.max_length).collect();
+            sanitized_text.push_str("...(omitted)");
+        }
+        let reply_text = format!("@{} {sanitized_text}", status.account.acct);
         let reply_visibility = match status.visibility {
             Visibility::Public => Visibility::Unlisted,
             otherwise => otherwise,

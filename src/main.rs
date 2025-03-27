@@ -4,6 +4,7 @@ mod error;
 mod impls;
 mod model;
 mod specs;
+mod text;
 
 use crate::{
     assistant::Assistant,
