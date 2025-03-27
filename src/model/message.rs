@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use url::Url;
 
 /// `Conversation` 中の単一メッセージ。
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -17,9 +18,13 @@ impl Message {
         Message::System(SystemMessage(text.into()))
     }
 
-    pub fn new_user(text: impl Into<String>, name: Option<String>, language: Option<String>) -> Message {
+    pub fn new_user(
+        contents: impl IntoIterator<Item = UserMessageContent>,
+        name: Option<String>,
+        language: Option<String>,
+    ) -> Message {
         Message::User(UserMessage {
-            message: text.into(),
+            contents: contents.into_iter().collect(),
             name,
             language,
         })
@@ -48,7 +53,7 @@ impl Message {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 pub struct UserMessage {
-    pub message: String,
+    pub contents: Vec<UserMessageContent>,
     pub name: Option<String>,
     pub language: Option<String>,
 }
@@ -57,6 +62,12 @@ impl From<UserMessage> for Message {
     fn from(value: UserMessage) -> Message {
         Message::User(value)
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum UserMessageContent {
+    Text(String),
+    ImageUrl(Url),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]

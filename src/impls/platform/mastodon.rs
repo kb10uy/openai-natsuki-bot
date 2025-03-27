@@ -2,7 +2,10 @@ use crate::{
     USER_AGENT,
     assistant::Assistant,
     error::PlatformError,
-    model::{config::AppConfigPlatformMastodon, message::UserMessage},
+    model::{
+        config::AppConfigPlatformMastodon,
+        message::{UserMessage, UserMessageContent},
+    },
     specs::platform::ConversationPlatform,
     text::markdown::sanitize_markdown_mastodon,
 };
@@ -14,6 +17,7 @@ use html2md::parse_html;
 use mastodon_async::{
     Error as MastodonError, Mastodon, NewStatus, Visibility,
     entities::{account::Account, event::Event, notification::Type as NotificationType, status::Status},
+    prelude::MediaType,
 };
 use regex::Regex;
 use tokio::spawn;
@@ -106,11 +110,6 @@ impl MastodonPlatformInner {
             return Ok(());
         }
 
-        // パース
-        let content_markdown = parse_html(&status.content);
-        let stripped = RE_HEAD_MENTION.replace_all(&content_markdown, "");
-        info!("[{}] {}: {:?}", status.id, status.account.acct, stripped);
-
         // Conversation の検索
         let context_key = status.in_reply_to_id.map(|si| si.to_string());
         let conversation = match context_key {
@@ -130,9 +129,29 @@ impl MastodonPlatformInner {
             }
         };
 
+        // パース
+        let content_markdown = parse_html(&status.content);
+        let stripped = RE_HEAD_MENTION.replace_all(&content_markdown, "");
+        let images: Vec<_> = status
+            .media_attachments
+            .into_iter()
+            .filter(|a| matches!(a.media_type, MediaType::Image | MediaType::Gifv))
+            .map(|atch| UserMessageContent::ImageUrl(atch.preview_url))
+            .collect();
+        info!(
+            "[{}] {}: {:?} ({} image(s))",
+            status.id,
+            status.account.acct,
+            stripped,
+            images.len()
+        );
+
+        let mut contents = vec![UserMessageContent::Text(stripped.to_string())];
+        contents.extend(images);
+
         // Conversation の更新・呼出し
         let user_message = UserMessage {
-            message: stripped.to_string(),
+            contents,
             language: status.language.and_then(|l| l.to_639_1()).map(|l| l.to_string()),
             ..Default::default()
         };

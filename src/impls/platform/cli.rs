@@ -1,5 +1,8 @@
 use crate::{
-    assistant::Assistant, error::PlatformError, model::message::UserMessage, specs::platform::ConversationPlatform,
+    assistant::Assistant,
+    error::PlatformError,
+    model::message::{UserMessage, UserMessageContent},
+    specs::platform::ConversationPlatform,
 };
 
 use std::io::stdin;
@@ -34,7 +37,7 @@ impl ConversationPlatform for CliPlatform {
                 info!("sending {input}");
 
                 let user_message = UserMessage {
-                    message: input,
+                    contents: vec![UserMessageContent::Text(input)],
                     ..Default::default()
                 };
                 let conversation_update = assistant.process_conversation(conversation, user_message).await?;
