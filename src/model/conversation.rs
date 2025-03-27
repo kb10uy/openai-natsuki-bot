@@ -1,6 +1,4 @@
-use crate::model::{message::Message, schema::DescribedSchema};
-
-use std::sync::LazyLock;
+use crate::model::message::Message;
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -47,19 +45,3 @@ pub struct StructuredResponse {
     pub language: String,
     pub sensitive: bool,
 }
-
-// MEMO: proc macro で serde のついでに作った方が面白い
-pub static ASSISTANT_RESPONSE_SCHEMA: LazyLock<DescribedSchema> = LazyLock::new(|| {
-    DescribedSchema::object(
-        "response",
-        "response as assistant",
-        vec![
-            DescribedSchema::string("text", "You must adhere the system prompt for this field."),
-            DescribedSchema::string("language", "IETF BCP47 language tag for the content of `text`."),
-            DescribedSchema::boolean(
-                "sensitive",
-                "Whether `text` has sensitive topics, like sexual or politic ones.",
-            ),
-        ],
-    )
-});

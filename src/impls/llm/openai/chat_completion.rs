@@ -1,11 +1,7 @@
 use crate::{
     error::LlmError,
-    impls::llm::openai::{RESPONSE_JSON_SCHEMA, create_openai_client},
-    model::{
-        config::AppConfigLlmOpenai,
-        conversation::{Conversation, StructuredResponse},
-        message::Message,
-    },
+    impls::llm::openai::create_openai_client,
+    model::{config::AppConfigLlmOpenai, conversation::Conversation, message::Message},
     specs::llm::{Llm, LlmUpdate},
 };
 
@@ -14,9 +10,7 @@ use std::sync::Arc;
 use async_openai::{
     Client,
     config::OpenAIConfig,
-    types::{
-        ChatCompletionRequestFunctionMessage, ChatCompletionRequestMessage, CreateChatCompletionRequest, ResponseFormat,
-    },
+    types::{ChatCompletionRequestFunctionMessage, ChatCompletionRequestMessage, CreateChatCompletionRequest},
 };
 use futures::{FutureExt, future::BoxFuture};
 
@@ -54,12 +48,10 @@ struct ChatCompletionBackendInner {
 impl ChatCompletionBackendInner {
     async fn send_conversation(&self, conversation: &Conversation) -> Result<LlmUpdate, LlmError> {
         let messages = conversation.messages().iter().map(transform_message).collect();
+        // 本当は json_schema/json_mode を使いたいが様々な事情により素のテキストで JSON が返ってくることを期待する
         let request = CreateChatCompletionRequest {
             messages,
             model: self.model.clone(),
-            response_format: Some(ResponseFormat::JsonSchema {
-                json_schema: RESPONSE_JSON_SCHEMA.clone(),
-            }),
             max_completion_tokens: Some(self.max_token as u32),
             ..Default::default()
         };
@@ -69,23 +61,14 @@ impl ChatCompletionBackendInner {
             return Err(LlmError::NoChoice);
         };
 
-        /*
         let response = first_choice
             .message
             .content
             .map(|s| serde_json::from_str(&s))
             .transpose()
-            .map_err(|e| LlmError::Backend(e.into()))?;
-        */
-        let update = LlmUpdate {
-            // TODO: de しろ
-            // response,
-            response: Some(StructuredResponse {
-                text: first_choice.message.content.unwrap_or_default(),
-                language: "ja".into(),
-                sensitive: false,
-            }),
-        };
+            .map_err(|e| LlmError::ResponseFormat(e.into()))?;
+
+        let update = LlmUpdate { response };
         Ok(update)
     }
 }
