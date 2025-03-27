@@ -14,7 +14,13 @@ impl SimpleFunction for SelfInfo {
     fn get_descriptor(&self) -> SimpleFunctionDescriptor {
         SimpleFunctionDescriptor {
             name: "self_info".to_string(),
-            description: "この bot 自身のバージョンやビルドに関する情報を取得する。".to_string(),
+            description: r#"
+                この bot 自身に関する以下の情報を提供する。
+                - バージョン
+                - Git コミットハッシュ
+                - bot のバイナリがビルドされた日時
+            "#
+            .to_string(),
             parameters: DescribedSchema::object("parameters", "引数", vec![]),
         }
     }

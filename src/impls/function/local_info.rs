@@ -21,7 +21,12 @@ impl SimpleFunction for LocalInfo {
     fn get_descriptor(&self) -> SimpleFunctionDescriptor {
         SimpleFunctionDescriptor {
             name: "self_info".to_string(),
-            description: "この bot が動作している環境の情報(現在時刻、uptime など)を取得する。".to_string(),
+            description: r#"
+                この bot が動作している環境に関する以下の情報を提供する。
+                - 現在時刻
+                - bot が動作を開始した日時
+            "#
+            .to_string(),
             parameters: DescribedSchema::object("parameters", "引数", vec![]),
         }
     }
