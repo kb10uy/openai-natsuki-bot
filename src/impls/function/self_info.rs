@@ -14,7 +14,7 @@ impl SimpleFunction for SelfInfo {
     fn get_descriptor(&self) -> SimpleFunctionDescriptor {
         SimpleFunctionDescriptor {
             name: "self_info".to_string(),
-            description: "この bot 自身の情報を取得する。".to_string(),
+            description: "この bot 自身のバージョンやビルドに関する情報を取得する。".to_string(),
             parameters: DescribedSchema::object("parameters", "引数", vec![]),
         }
     }
@@ -25,10 +25,15 @@ impl SimpleFunction for SelfInfo {
 }
 
 impl SelfInfo {
+    pub fn new() -> SelfInfo {
+        SelfInfo {}
+    }
+
     fn get_info(&self) -> Result<Value, FunctionError> {
         Ok(json!({
             "version": env!("CARGO_PKG_VERSION"),
             "commit": env!("GIT_COMMIT_HASH"),
+            "built_at": env!("BUILT_AT_DATETIME"),
         }))
     }
 }

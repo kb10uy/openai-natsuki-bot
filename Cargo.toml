@@ -30,6 +30,7 @@ sqlx = { version = "0.8.3", features = [
     "time",
 ] }
 thiserror = "2.0.12"
+time = { version = "0.3.41", features = ["formatting", "local-offset"] }
 tokio = { version = "1.44.1", features = ["full"] }
 tokio-stream = "0.1.17"
 toml = "0.8.20"
@@ -37,6 +38,9 @@ tracing = "0.1.41"
 tracing-subscriber = "0.3.19"
 url = "2.5.4"
 uuid = { version = "1.16.0", features = ["serde", "v7"] }
+
+[build-dependencies]
+time = { version = "0.3.41", features = ["formatting", "local-offset"] }
 
 [profile.release]
 lto = true
