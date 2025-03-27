@@ -16,7 +16,7 @@ use std::{collections::HashMap, sync::LazyLock};
 
 use async_openai::{error::OpenAIError, types::ResponseFormatJsonSchema};
 use reqwest::Error as ReqwestError;
-use serde_json::{Value as JsonValue, json};
+use serde_json::{Error as SerdeJsonError, Value, json};
 
 pub async fn create_llm(config: &AppConfigLlm) -> Result<Box<dyn Llm + 'static>, LlmError> {
     match config.backend {
@@ -27,19 +27,7 @@ pub async fn create_llm(config: &AppConfigLlm) -> Result<Box<dyn Llm + 'static>,
     }
 }
 
-impl From<OpenAIError> for LlmError {
-    fn from(value: OpenAIError) -> Self {
-        LlmError::Backend(value.into())
-    }
-}
-
-impl From<ReqwestError> for LlmError {
-    fn from(value: ReqwestError) -> Self {
-        LlmError::Communication(value.into())
-    }
-}
-
-fn convert_json_schema(schema: &DescribedSchema) -> JsonValue {
+fn convert_json_schema(schema: &DescribedSchema) -> Value {
     match &schema.field_type {
         DescribedSchemaType::Integer => json!({
             "type": "integer",
@@ -79,3 +67,21 @@ static RESPONSE_JSON_SCHEMA: LazyLock<ResponseFormatJsonSchema> = LazyLock::new(
     schema: Some(convert_json_schema(&ASSISTANT_RESPONSE_SCHEMA)),
     strict: Some(true),
 });
+
+impl From<OpenAIError> for LlmError {
+    fn from(value: OpenAIError) -> Self {
+        LlmError::Backend(value.into())
+    }
+}
+
+impl From<ReqwestError> for LlmError {
+    fn from(value: ReqwestError) -> Self {
+        LlmError::Communication(value.into())
+    }
+}
+
+impl From<SerdeJsonError> for LlmError {
+    fn from(value: SerdeJsonError) -> Self {
+        LlmError::ResponseFormat(value.into())
+    }
+}

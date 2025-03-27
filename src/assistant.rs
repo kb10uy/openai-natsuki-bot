@@ -3,14 +3,19 @@ use crate::{
     model::{
         config::AppConfigAssistantIdentity,
         conversation::Conversation,
-        message::{AssistantMessage, Message},
+        message::{AssistantMessage, FunctionCall, FunctionCallsMessage, FunctionResponseMessage, Message},
     },
-    specs::{function::simple::SimpleFunction, llm::Llm, storage::ConversationStorage},
+    specs::{
+        function::simple::SimpleFunction,
+        llm::{Llm, LlmToolCalling, LlmUpdate},
+        storage::ConversationStorage,
+    },
 };
 
 use std::{collections::HashMap, fmt::Debug, sync::Arc};
 
 use tokio::sync::Mutex;
+use tracing::warn;
 
 /// 各種アシスタント動作の抽象化レイヤー。
 #[derive(Debug, Clone)]
@@ -45,8 +50,17 @@ impl Assistant {
         &self,
         conversation: &Conversation,
     ) -> Result<ConversationUpdate, AssistantError> {
-        let update = self.0.llm.send_conversation(conversation).await?;
-        let Some(response) = update.response else {
+        // 1 回目の呼出しで tool calling を判定する
+        let first_update = self.0.llm.send_conversation(conversation).await?;
+        let (assistant_update, function_actions) = if let Some(tool_callings) = first_update.tool_callings {
+            todo!();
+            // let call_message = Message::new_function_calls(message_tool_calls);
+            // let response_messages = self.process_tool_callings(tool_callings).await?;
+        } else {
+            (first_update, None)
+        };
+
+        let Some(response) = assistant_update.response else {
             return Err(AssistantError::ChatResponseExpected);
         };
 
@@ -64,8 +78,10 @@ impl Assistant {
             is_sensitive,
             language: response.language,
         };
-
-        Ok(ConversationUpdate { assistant_response })
+        Ok(ConversationUpdate {
+            assistant_response,
+            function_actions,
+        })
     }
 
     /// 新しい `Conversation` を現在時刻の ID で初期化する。
@@ -92,6 +108,54 @@ impl Assistant {
         self.0.storage.upsert(conversation, platform, context).await?;
         Ok(())
     }
+
+    async fn process_tool_callings(
+        &self,
+        tool_callings: Vec<LlmToolCalling>,
+    ) -> Result<Vec<FunctionResponseMessage>, AssistantError> {
+        let locked = self.0.simple_functions.lock().await;
+
+        let mut responses = vec![];
+        for tool_calling in tool_callings {
+            // MCP と複合するのをあとで考える
+            let Some(simple_function) = locked.get(&tool_calling.name) else {
+                warn!("tool {} not found, skipping", tool_calling.name);
+                continue;
+            };
+            let result = simple_function.call(&tool_calling.id, tool_calling.arguments).await?;
+            responses.push(FunctionResponseMessage {
+                id: tool_calling.id,
+                name: tool_calling.name,
+                result,
+            });
+        }
+
+        Ok(responses)
+    }
+
+    async fn process_second_conversation_update(
+        &self,
+        tool_callings: Vec<LlmToolCalling>,
+    ) -> Result<Vec<FunctionResponseMessage>, AssistantError> {
+        let locked = self.0.simple_functions.lock().await;
+
+        let mut responses = vec![];
+        for tool_calling in tool_callings {
+            // MCP と複合するのをあとで考える
+            let Some(simple_function) = locked.get(&tool_calling.name) else {
+                warn!("tool {} not found, skipping", tool_calling.name);
+                continue;
+            };
+            let result = simple_function.call(&tool_calling.id, tool_calling.arguments).await?;
+            responses.push(FunctionResponseMessage {
+                id: tool_calling.id,
+                name: tool_calling.name,
+                result,
+            });
+        }
+
+        Ok(responses)
+    }
 }
 
 #[derive(Debug)]
@@ -105,5 +169,6 @@ struct AssistantInner {
 
 #[derive(Debug, Clone)]
 pub struct ConversationUpdate {
+    pub function_actions: Option<(FunctionCallsMessage, Vec<FunctionResponseMessage>)>,
     pub assistant_response: AssistantMessage,
 }

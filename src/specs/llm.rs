@@ -7,6 +7,7 @@ use crate::{
 use std::fmt::Debug;
 
 use futures::future::BoxFuture;
+use serde_json::Value;
 
 #[allow(dead_code)]
 pub trait Llm: Send + Sync + Debug {
@@ -21,4 +22,13 @@ pub trait Llm: Send + Sync + Debug {
 #[derive(Debug, Clone)]
 pub struct LlmUpdate {
     pub response: Option<StructuredResponse>,
+    pub tool_callings: Option<Vec<LlmToolCalling>>,
+}
+
+/// Conversation を送信した結果生成された内容。
+#[derive(Debug, Clone)]
+pub struct LlmToolCalling {
+    pub id: String,
+    pub name: String,
+    pub arguments: Value,
 }

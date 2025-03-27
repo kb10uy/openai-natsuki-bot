@@ -40,6 +40,13 @@ pub enum AssistantError {
         StorageError,
     ),
 
+    #[error("function error: {0}")]
+    Function(
+        #[source]
+        #[from]
+        FunctionError,
+    ),
+
     /// 期待されていた応答が存在しなかった。
     #[error("expected chat resnpose not found")]
     ChatResponseExpected,

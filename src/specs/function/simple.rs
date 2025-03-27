@@ -18,5 +18,5 @@ pub trait SimpleFunction: Send + Sync + Debug {
     fn get_descriptor(&self) -> SimpleFunctionDescriptor;
 
     /// Function を実行する。
-    fn call<'a>(&'a self, id: &str, params: Value) -> BoxFuture<'a, Result<String, FunctionError>>;
+    fn call<'a>(&'a self, id: &str, params: Value) -> BoxFuture<'a, Result<Value, FunctionError>>;
 }

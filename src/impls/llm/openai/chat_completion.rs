@@ -8,7 +8,7 @@ use crate::{
     },
     specs::{
         function::simple::SimpleFunctionDescriptor,
-        llm::{Llm, LlmUpdate},
+        llm::{Llm, LlmToolCalling, LlmUpdate},
     },
 };
 
@@ -18,9 +18,10 @@ use async_openai::{
     Client,
     config::OpenAIConfig,
     types::{
-        ChatCompletionRequestFunctionMessage, ChatCompletionRequestMessage, ChatCompletionRequestUserMessage,
-        ChatCompletionRequestUserMessageContent, ChatCompletionTool, CreateChatCompletionRequest, FunctionObject,
-        ResponseFormat,
+        ChatCompletionMessageToolCall, ChatCompletionRequestAssistantMessage, ChatCompletionRequestMessage,
+        ChatCompletionRequestToolMessage, ChatCompletionRequestToolMessageContent, ChatCompletionRequestUserMessage,
+        ChatCompletionRequestUserMessageContent, ChatCompletionTool, ChatCompletionToolType,
+        CreateChatCompletionRequest, FunctionCall, FunctionObject, ResponseFormat,
     },
 };
 use futures::{FutureExt, future::BoxFuture};
@@ -82,11 +83,11 @@ impl ChatCompletionBackendInner {
     }
 
     async fn send_conversation(&self, conversation: &Conversation) -> Result<LlmUpdate, LlmError> {
-        let messages = conversation.messages().iter().map(transform_message).collect();
+        let messages: Result<_, _> = conversation.messages().iter().map(transform_message).collect();
         if self.structured_mode {
-            self.send_conversation_structured(messages).await
+            self.send_conversation_structured(messages?).await
         } else {
-            self.send_conversation_normal(messages).await
+            self.send_conversation_normal(messages?).await
         }
     }
 
@@ -107,12 +108,30 @@ impl ChatCompletionBackendInner {
             return Err(LlmError::NoChoice);
         };
 
+        let tool_callings = match first_choice.message.tool_calls {
+            Some(calls) => {
+                let converted_calls: Result<Vec<_>, _> = calls
+                    .into_iter()
+                    .map(|c| {
+                        serde_json::from_str(&c.function.arguments).map(|args| LlmToolCalling {
+                            id: c.id,
+                            name: c.function.name,
+                            arguments: args,
+                        })
+                    })
+                    .collect();
+                Some(converted_calls?)
+            }
+            None => None,
+        };
+
         let update = LlmUpdate {
             response: first_choice.message.content.map(|text| StructuredResponse {
                 text,
                 language: None,
                 sensitive: None,
             }),
+            tool_callings,
         };
         Ok(update)
     }
@@ -136,6 +155,23 @@ impl ChatCompletionBackendInner {
             return Err(LlmError::NoChoice);
         };
 
+        let tool_callings = match first_choice.message.tool_calls {
+            Some(calls) => {
+                let converted_calls: Result<Vec<_>, _> = calls
+                    .into_iter()
+                    .map(|c| {
+                        serde_json::from_str(&c.function.arguments).map(|args| LlmToolCalling {
+                            id: c.id,
+                            name: c.function.name,
+                            arguments: args,
+                        })
+                    })
+                    .collect();
+                Some(converted_calls?)
+            }
+            None => None,
+        };
+
         let response = first_choice
             .message
             .content
@@ -143,26 +179,52 @@ impl ChatCompletionBackendInner {
             .transpose()
             .map_err(|e| LlmError::ResponseFormat(e.into()))?;
 
-        let update = LlmUpdate { response };
+        let update = LlmUpdate {
+            response,
+            tool_callings,
+        };
         Ok(update)
     }
 }
 
-fn transform_message(message: &Message) -> ChatCompletionRequestMessage {
-    match message {
+fn transform_message(message: &Message) -> Result<ChatCompletionRequestMessage, LlmError> {
+    let message = match message {
         Message::System(system_message) => ChatCompletionRequestMessage::System(system_message.0.clone().into()),
         Message::User(user_message) => ChatCompletionRequestMessage::User(ChatCompletionRequestUserMessage {
             content: ChatCompletionRequestUserMessageContent::Text(user_message.message.clone()),
             name: user_message.name.clone(),
         }),
-        Message::Function(function_message) => {
-            ChatCompletionRequestMessage::Function(ChatCompletionRequestFunctionMessage {
-                name: function_message.0.clone(),
-                content: Some(function_message.1.clone()),
-            })
-        }
         Message::Assistant(assistant_message) => {
             ChatCompletionRequestMessage::Assistant(assistant_message.text.clone().into())
         }
-    }
+        Message::FunctionCalls(function_calls_message) => {
+            let tool_calls: Result<_, _> = function_calls_message
+                .0
+                .iter()
+                .map(|c| {
+                    serde_json::to_string(&c.arguments).map(|args| ChatCompletionMessageToolCall {
+                        id: c.id.clone(),
+                        function: FunctionCall {
+                            name: c.name.clone(),
+                            arguments: args,
+                        },
+                        r#type: ChatCompletionToolType::Function,
+                    })
+                })
+                .collect();
+            ChatCompletionRequestMessage::Assistant(ChatCompletionRequestAssistantMessage {
+                tool_calls: Some(tool_calls?),
+                ..Default::default()
+            })
+        }
+        Message::FunctionResponse(function_response_message) => {
+            ChatCompletionRequestMessage::Tool(ChatCompletionRequestToolMessage {
+                tool_call_id: function_response_message.id.clone(),
+                content: ChatCompletionRequestToolMessageContent::Text(serde_json::to_string(
+                    &function_response_message.result,
+                )?),
+            })
+        }
+    };
+    Ok(message)
 }

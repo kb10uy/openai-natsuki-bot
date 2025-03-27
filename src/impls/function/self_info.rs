@@ -19,18 +19,16 @@ impl SimpleFunction for SelfInfo {
         }
     }
 
-    fn call<'a>(&'a self, _id: &str, _params: Value) -> BoxFuture<'a, Result<String, FunctionError>> {
+    fn call<'a>(&'a self, _id: &str, _params: Value) -> BoxFuture<'a, Result<Value, FunctionError>> {
         async { self.get_info() }.boxed()
     }
 }
 
 impl SelfInfo {
-    fn get_info(&self) -> Result<String, FunctionError> {
-        let info = json!({
+    fn get_info(&self) -> Result<Value, FunctionError> {
+        Ok(json!({
             "version": env!("CARGO_PKG_VERSION"),
             "commit": env!("GIT_COMMIT_HASH"),
-        });
-        let info_json = serde_json::to_string(&info)?;
-        Ok(info_json)
+        }))
     }
 }
