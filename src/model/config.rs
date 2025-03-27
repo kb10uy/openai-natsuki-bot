@@ -34,6 +34,7 @@ pub struct AppConfigPlatformMastodon {
     pub server_url: String,
     pub token: String,
     pub sensitive_spoiler: String,
+    pub max_length: usize,
 }
 
 /// [storage]
