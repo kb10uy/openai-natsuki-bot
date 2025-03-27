@@ -1,4 +1,7 @@
-use crate::{error::LlmError, model::conversation::Conversation};
+use crate::{
+    error::LlmError,
+    model::conversation::{Conversation, StructuredResponse},
+};
 
 use std::fmt::Debug;
 
@@ -13,5 +16,5 @@ pub trait Llm: Send + Sync + Debug {
 /// Conversation を送信した結果生成された内容。
 #[derive(Debug, Clone)]
 pub struct LlmUpdate {
-    pub text: Option<String>,
+    pub response: Option<StructuredResponse>,
 }

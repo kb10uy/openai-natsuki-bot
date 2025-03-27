@@ -128,7 +128,11 @@ impl MastodonPlatformInner {
         };
 
         // Conversation の更新・呼出し
-        conversation.push_message(Message::new_user(stripped));
+        conversation.push_message(Message::new_user(
+            stripped,
+            None,
+            status.language.and_then(|l| l.to_639_1()).map(|l| l.to_string()),
+        ));
         let update = self.assistant.process_conversation(&conversation).await?;
         let assistant_response = update.assistant_response;
         info!(

@@ -57,6 +57,10 @@ pub enum LlmError {
     /// LLM が有効なレスポンスを生成しなかった。
     #[error("no choice returned")]
     NoChoice,
+
+    /// JSON の復元ができない。
+    #[error("invalid response format: {0}")]
+    ResponseFormat(#[source] Box<dyn StdError + Send + Sync + 'static>),
 }
 
 /// Storage 層のエラー。

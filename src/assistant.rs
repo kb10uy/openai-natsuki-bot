@@ -34,15 +34,24 @@ impl Assistant {
         conversation: &Conversation,
     ) -> Result<ConversationUpdate, AssistantError> {
         let update = self.0.llm.send_conversation(conversation).await?;
-        let Some(response_text) = update.text else {
+        let Some(response) = update.response else {
             return Err(AssistantError::ChatResponseExpected);
         };
 
-        let (text, is_sensitive) = match response_text.strip_prefix(&self.0.sensitive_marker) {
-            Some(stripped) => (stripped.to_string(), true),
-            None => (response_text, false),
+        let (text, is_sensitive) = match response.sensitive {
+            Some(v) => (response.text, v),
+            None if self.0.sensitive_marker.is_empty() => (response.text, false),
+            _ => match response.text.strip_prefix(&self.0.sensitive_marker) {
+                Some(stripped) => (stripped.to_string(), true),
+                None => (response.text, false),
+            },
         };
-        let assistant_response = AssistantMessage { text, is_sensitive };
+
+        let assistant_response = AssistantMessage {
+            text,
+            is_sensitive,
+            language: response.language,
+        };
 
         Ok(ConversationUpdate { assistant_response })
     }

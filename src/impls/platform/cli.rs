@@ -32,7 +32,7 @@ impl ConversationPlatform for CliPlatform {
             // 応答ループ
             while let Some(input) = rx.recv().await {
                 info!("sending {input}");
-                conversation.push_message(Message::new_user(input));
+                conversation.push_message(Message::new_user(input, None, None));
                 let conversation_update = assistant.process_conversation(&conversation).await?;
                 println!(">> {}", conversation_update.assistant_response.text.bold().white());
                 conversation.push_message(conversation_update.assistant_response.into());

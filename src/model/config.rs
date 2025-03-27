@@ -76,6 +76,7 @@ pub struct AppConfigLlmOpenai {
     pub token: String,
     pub model: String,
     pub max_token: usize,
+    pub use_structured_output: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -94,5 +95,7 @@ pub struct AppConfigAssistant {
 #[derive(Debug, Clone, Deserialize)]
 pub struct AppConfigAssistantIdentity {
     pub system_role: String,
+
+    #[serde(default = "Default::default")]
     pub sensitive_marker: String,
 }
