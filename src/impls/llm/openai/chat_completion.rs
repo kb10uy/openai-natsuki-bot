@@ -1,6 +1,9 @@
 use crate::{
     error::LlmError,
-    impls::llm::{RESPONSE_JSON_SCHEMA, convert_json_schema, openai::create_openai_client},
+    impls::llm::{
+        convert_json_schema,
+        openai::{RESPONSE_JSON_SCHEMA, create_openai_client},
+    },
     model::{config::AppConfigLlmOpenai, conversation::Conversation, message::Message},
     specs::{
         function::simple::SimpleFunctionDescriptor,

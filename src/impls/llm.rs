@@ -6,7 +6,6 @@ use crate::{
     error::LlmError,
     model::{
         config::{AppConfigLlm, AppConfigLlmBackend, AppConfigLlmOpenaiApi},
-        conversation::ASSISTANT_RESPONSE_SCHEMA,
         schema::{DescribedSchema, DescribedSchemaType},
     },
     specs::llm::Llm,
@@ -14,9 +13,25 @@ use crate::{
 
 use std::{collections::HashMap, sync::LazyLock};
 
-use async_openai::{error::OpenAIError, types::ResponseFormatJsonSchema};
+use async_openai::error::OpenAIError;
 use reqwest::Error as ReqwestError;
 use serde_json::{Error as SerdeJsonError, Value, json};
+
+// MEMO: proc macro で serde のついでに作った方が面白い
+pub static ASSISTANT_RESPONSE_SCHEMA: LazyLock<DescribedSchema> = LazyLock::new(|| {
+    DescribedSchema::object(
+        "response",
+        "response as assistant",
+        vec![
+            DescribedSchema::string(
+                "text",
+                "ユーザーへの主要な回答内容。夏稀としてふるまって回答してください。",
+            ),
+            DescribedSchema::string("language", "`text` フィールドに対応する IETF BCP47 言語タグ。"),
+            DescribedSchema::boolean("sensitive", "`text` フィールドが性的な話題を含むかどうか。"),
+        ],
+    )
+});
 
 pub async fn create_llm(config: &AppConfigLlm) -> Result<Box<dyn Llm + 'static>, LlmError> {
     match config.backend {
@@ -60,13 +75,6 @@ fn convert_json_schema(schema: &DescribedSchema) -> Value {
         }
     }
 }
-
-static RESPONSE_JSON_SCHEMA: LazyLock<ResponseFormatJsonSchema> = LazyLock::new(|| ResponseFormatJsonSchema {
-    name: "response".into(),
-    description: Some("response from assistant".into()),
-    schema: Some(convert_json_schema(&ASSISTANT_RESPONSE_SCHEMA)),
-    strict: Some(true),
-});
 
 impl From<OpenAIError> for LlmError {
     fn from(value: OpenAIError) -> Self {

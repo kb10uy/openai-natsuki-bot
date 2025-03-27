@@ -1,16 +1,26 @@
 mod chat_completion;
 mod responses;
 
+use std::sync::LazyLock;
+
 pub use chat_completion::ChatCompletionBackend;
 pub use responses::ResponsesBackend;
 
 use crate::{
     USER_AGENT,
     error::LlmError,
+    impls::llm::{ASSISTANT_RESPONSE_SCHEMA, convert_json_schema},
     model::config::AppConfigLlmOpenai,
 };
 
-use async_openai::{Client, config::OpenAIConfig};
+use async_openai::{Client, config::OpenAIConfig, types::ResponseFormatJsonSchema};
+
+static RESPONSE_JSON_SCHEMA: LazyLock<ResponseFormatJsonSchema> = LazyLock::new(|| ResponseFormatJsonSchema {
+    name: "response".into(),
+    description: Some("response from assistant".into()),
+    schema: Some(convert_json_schema(&ASSISTANT_RESPONSE_SCHEMA)),
+    strict: Some(true),
+});
 
 async fn create_openai_client(openai_config: &AppConfigLlmOpenai) -> Result<Client<OpenAIConfig>, LlmError> {
     let config = OpenAIConfig::new()
