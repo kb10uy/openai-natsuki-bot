@@ -5,10 +5,12 @@ use crate::{
         conversation::Conversation,
         message::{AssistantMessage, Message},
     },
-    specs::{llm::Llm, storage::ConversationStorage},
+    specs::{function::simple::SimpleFunction, llm::Llm, storage::ConversationStorage},
 };
 
-use std::{fmt::Debug, sync::Arc};
+use std::{collections::HashMap, fmt::Debug, sync::Arc};
+
+use tokio::sync::Mutex;
 
 /// 各種アシスタント動作の抽象化レイヤー。
 #[derive(Debug, Clone)]
@@ -23,9 +25,19 @@ impl Assistant {
         Assistant(Arc::new(AssistantInner {
             llm,
             storage,
+            simple_functions: Mutex::new(HashMap::new()),
             system_role: assistant_identity.system_role.clone(),
             sensitive_marker: assistant_identity.sensitive_marker.clone(),
         }))
+    }
+
+    /// `SimpleFunction` を登録する。
+    pub async fn add_simple_function(&self, simple_function: impl SimpleFunction + 'static) {
+        let descriptor = simple_function.get_descriptor();
+
+        let mut locked = self.0.simple_functions.lock().await;
+        locked.insert(descriptor.name.clone(), Box::new(simple_function));
+        self.0.llm.add_simple_function(descriptor).await;
     }
 
     /// 指定された `Conversation` が「完了」するまで処理する。
@@ -86,6 +98,7 @@ impl Assistant {
 struct AssistantInner {
     llm: Box<dyn Llm + 'static>,
     storage: Box<dyn ConversationStorage + 'static>,
+    simple_functions: Mutex<HashMap<String, Box<dyn SimpleFunction + 'static>>>,
     system_role: String,
     sensitive_marker: String,
 }

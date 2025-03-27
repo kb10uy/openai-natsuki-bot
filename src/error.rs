@@ -75,4 +75,7 @@ pub enum StorageError {
 
 /// Function 層のエラー。
 #[derive(Debug, ThisError)]
-pub enum FunctionError {}
+pub enum FunctionError {
+    #[error("serialization error: {0}")]
+    Serialization(#[source] Box<dyn StdError + Send + Sync + 'static>),
+}
