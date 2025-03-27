@@ -25,7 +25,7 @@ impl Message {
         })
     }
 
-    pub fn new_function_calls(calls: impl IntoIterator<Item = FunctionCall>) -> Message {
+    pub fn new_function_calls(calls: impl IntoIterator<Item = MessageFunctionCall>) -> Message {
         Message::FunctionCalls(FunctionCallsMessage(calls.into_iter().collect()))
     }
 
@@ -46,7 +46,7 @@ impl Message {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 pub struct UserMessage {
     pub message: String,
     pub name: Option<String>,
@@ -59,7 +59,7 @@ impl From<UserMessage> for Message {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 pub struct SystemMessage(pub String);
 
 impl From<SystemMessage> for Message {
@@ -68,11 +68,11 @@ impl From<SystemMessage> for Message {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct FunctionCallsMessage(pub Vec<FunctionCall>);
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+pub struct FunctionCallsMessage(pub Vec<MessageFunctionCall>);
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct FunctionCall {
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+pub struct MessageFunctionCall {
     pub id: String,
     pub name: String,
     pub arguments: Value,
@@ -84,7 +84,7 @@ impl From<FunctionCallsMessage> for Message {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 pub struct FunctionResponseMessage {
     pub id: String,
     pub name: String,
@@ -97,7 +97,7 @@ impl From<FunctionResponseMessage> for Message {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 pub struct AssistantMessage {
     pub text: String,
     pub is_sensitive: bool,

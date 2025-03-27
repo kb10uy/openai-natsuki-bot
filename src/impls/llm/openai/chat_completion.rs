@@ -4,10 +4,14 @@ use crate::{
         convert_json_schema,
         openai::{RESPONSE_JSON_SCHEMA, create_openai_client},
     },
-    model::{config::AppConfigLlmOpenai, conversation::Conversation, message::Message},
+    model::{
+        config::AppConfigLlmOpenai,
+        conversation::IncompleteConversation,
+        message::{Message, MessageFunctionCall},
+    },
     specs::{
         function::simple::SimpleFunctionDescriptor,
-        llm::{Llm, LlmAssistantResponse, LlmToolCalling, LlmUpdate},
+        llm::{Llm, LlmAssistantResponse, LlmUpdate},
     },
 };
 
@@ -50,7 +54,10 @@ impl Llm for ChatCompletionBackend {
         async { self.0.add_simple_function(descriptor).await }.boxed()
     }
 
-    fn send_conversation<'a>(&'a self, conversation: &'a Conversation) -> BoxFuture<'a, Result<LlmUpdate, LlmError>> {
+    fn send_conversation<'a>(
+        &'a self,
+        conversation: &'a IncompleteConversation,
+    ) -> BoxFuture<'a, Result<LlmUpdate, LlmError>> {
         let cloned = self.0.clone();
         async move { cloned.send_conversation(conversation).await }.boxed()
     }
@@ -81,8 +88,8 @@ impl ChatCompletionBackendInner {
         locked.push(tool);
     }
 
-    async fn send_conversation(&self, conversation: &Conversation) -> Result<LlmUpdate, LlmError> {
-        let messages: Result<_, _> = conversation.messages().iter().map(transform_message).collect();
+    async fn send_conversation(&self, conversation: &IncompleteConversation) -> Result<LlmUpdate, LlmError> {
+        let messages: Result<_, _> = conversation.latest_messages.iter().map(transform_message).collect();
         if self.structured_mode {
             self.send_conversation_structured(messages?).await
         } else {
@@ -112,7 +119,7 @@ impl ChatCompletionBackendInner {
                 let converted_calls: Result<Vec<_>, _> = calls
                     .into_iter()
                     .map(|c| {
-                        serde_json::from_str(&c.function.arguments).map(|args| LlmToolCalling {
+                        serde_json::from_str(&c.function.arguments).map(|args| MessageFunctionCall {
                             id: c.id,
                             name: c.function.name,
                             arguments: args,
@@ -159,7 +166,7 @@ impl ChatCompletionBackendInner {
                 let converted_calls: Result<Vec<_>, _> = calls
                     .into_iter()
                     .map(|c| {
-                        serde_json::from_str(&c.function.arguments).map(|args| LlmToolCalling {
+                        serde_json::from_str(&c.function.arguments).map(|args| MessageFunctionCall {
                             id: c.id,
                             name: c.function.name,
                             arguments: args,

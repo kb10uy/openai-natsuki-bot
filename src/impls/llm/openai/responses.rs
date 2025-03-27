@@ -1,7 +1,7 @@
 use crate::{
     error::LlmError,
     impls::llm::openai::create_openai_client,
-    model::{config::AppConfigLlmOpenai, conversation::Conversation},
+    model::{config::AppConfigLlmOpenai, conversation::IncompleteConversation},
     specs::{
         function::simple::SimpleFunctionDescriptor,
         llm::{Llm, LlmUpdate},
@@ -31,7 +31,10 @@ impl Llm for ResponsesBackend {
         todo!()
     }
 
-    fn send_conversation<'a>(&'a self, conversation: &'a Conversation) -> BoxFuture<'a, Result<LlmUpdate, LlmError>> {
+    fn send_conversation<'a>(
+        &'a self,
+        conversation: &'a IncompleteConversation,
+    ) -> BoxFuture<'a, Result<LlmUpdate, LlmError>> {
         let cloned = self.0.clone();
         async move { cloned.send_conversation(conversation).await }.boxed()
     }
@@ -45,7 +48,7 @@ struct ResponsesBackendInner {
 }
 
 impl ResponsesBackendInner {
-    async fn send_conversation(&self, _conversation: &Conversation) -> Result<LlmUpdate, LlmError> {
+    async fn send_conversation(&self, _conversation: &IncompleteConversation) -> Result<LlmUpdate, LlmError> {
         todo!();
     }
 }

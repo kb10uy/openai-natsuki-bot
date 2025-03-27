@@ -1,6 +1,4 @@
-use std::sync::LazyLock;
-
-use crate::model::{message::Message, schema::DescribedSchema};
+use crate::model::message::{AssistantMessage, Message, UserMessage};
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -22,26 +20,48 @@ impl Conversation {
     pub fn id(&self) -> Uuid {
         self.id
     }
+}
 
-    pub fn messages(&self) -> &[Message] {
-        &self.messages
+#[derive(Debug, Clone)]
+pub struct IncompleteConversation {
+    pub id: Uuid,
+    pub latest_messages: Vec<Message>,
+}
+
+impl IncompleteConversation {
+    pub fn start(mut conversation: Conversation, user_message: UserMessage) -> IncompleteConversation {
+        conversation.messages.push(user_message.into());
+
+        IncompleteConversation {
+            id: conversation.id,
+            latest_messages: conversation.messages,
+        }
     }
 
-    pub fn push_message(&mut self, message: Message) {
-        self.messages.push(message);
-    }
-
-    /// 先頭から `taking_messages` の数だけ `messages` を複製した `Conversation` を作成する。
-    #[allow(dead_code)]
-    pub fn create_branch_now(&self, taking_messages: usize) -> Conversation {
-        Conversation {
-            id: Uuid::now_v7(),
-            messages: self.messages[..taking_messages].to_vec(),
+    pub fn finish(self, last_assistant_message: AssistantMessage) -> ConversationUpdate {
+        ConversationUpdate {
+            conversation: Conversation {
+                id: self.id,
+                messages: self.latest_messages,
+            },
+            assistant_message: last_assistant_message,
         }
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ConversationUserInput {
-    pub text: String,
+#[derive(Debug, Clone)]
+pub struct ConversationUpdate {
+    conversation: Conversation,
+    assistant_message: AssistantMessage,
+}
+
+impl ConversationUpdate {
+    pub fn assistant_message(&self) -> &AssistantMessage {
+        &self.assistant_message
+    }
+
+    pub fn finish(mut self) -> Conversation {
+        self.conversation.messages.push(self.assistant_message.into());
+        self.conversation
+    }
 }

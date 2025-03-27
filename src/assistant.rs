@@ -2,14 +2,10 @@ use crate::{
     error::AssistantError,
     model::{
         config::AppConfigAssistantIdentity,
-        conversation::Conversation,
-        message::{AssistantMessage, FunctionCall, FunctionCallsMessage, FunctionResponseMessage, Message},
+        conversation::{Conversation, ConversationUpdate, IncompleteConversation},
+        message::{AssistantMessage, FunctionResponseMessage, Message, MessageFunctionCall, UserMessage},
     },
-    specs::{
-        function::simple::SimpleFunction,
-        llm::{Llm, LlmToolCalling, LlmUpdate},
-        storage::ConversationStorage,
-    },
+    specs::{function::simple::SimpleFunction, llm::Llm, storage::ConversationStorage},
 };
 
 use std::{collections::HashMap, fmt::Debug, sync::Arc};
@@ -48,16 +44,25 @@ impl Assistant {
     /// 指定された `Conversation` が「完了」するまで処理する。
     pub async fn process_conversation(
         &self,
-        conversation: &Conversation,
+        conversation: Conversation,
+        user_message: UserMessage,
     ) -> Result<ConversationUpdate, AssistantError> {
+        let mut incomplete_conversation = IncompleteConversation::start(conversation, user_message);
+
         // 1 回目の呼出しで tool calling を判定する
-        let first_update = self.0.llm.send_conversation(conversation).await?;
-        let (assistant_update, function_actions) = if let Some(tool_callings) = first_update.tool_callings {
-            todo!();
-            // let call_message = Message::new_function_calls(message_tool_calls);
-            // let response_messages = self.process_tool_callings(tool_callings).await?;
+        let first_update = self.0.llm.send_conversation(&incomplete_conversation).await?;
+        let assistant_update = if let Some(tool_callings) = first_update.tool_callings {
+            let call_message = Message::new_function_calls(tool_callings.clone());
+            let response_messages = self.process_tool_callings(tool_callings).await?;
+
+            incomplete_conversation.latest_messages.push(call_message);
+            incomplete_conversation
+                .latest_messages
+                .extend(response_messages.into_iter().map(|m| m.into()));
+
+            self.0.llm.send_conversation(&incomplete_conversation).await?
         } else {
-            (first_update, None)
+            first_update
         };
 
         let Some(response) = assistant_update.response else {
@@ -73,15 +78,11 @@ impl Assistant {
             },
         };
 
-        let assistant_response = AssistantMessage {
+        Ok(incomplete_conversation.finish(AssistantMessage {
             text,
             is_sensitive,
             language: response.language,
-        };
-        Ok(ConversationUpdate {
-            assistant_response,
-            function_actions,
-        })
+        }))
     }
 
     /// 新しい `Conversation` を現在時刻の ID で初期化する。
@@ -111,31 +112,7 @@ impl Assistant {
 
     async fn process_tool_callings(
         &self,
-        tool_callings: Vec<LlmToolCalling>,
-    ) -> Result<Vec<FunctionResponseMessage>, AssistantError> {
-        let locked = self.0.simple_functions.lock().await;
-
-        let mut responses = vec![];
-        for tool_calling in tool_callings {
-            // MCP と複合するのをあとで考える
-            let Some(simple_function) = locked.get(&tool_calling.name) else {
-                warn!("tool {} not found, skipping", tool_calling.name);
-                continue;
-            };
-            let result = simple_function.call(&tool_calling.id, tool_calling.arguments).await?;
-            responses.push(FunctionResponseMessage {
-                id: tool_calling.id,
-                name: tool_calling.name,
-                result,
-            });
-        }
-
-        Ok(responses)
-    }
-
-    async fn process_second_conversation_update(
-        &self,
-        tool_callings: Vec<LlmToolCalling>,
+        tool_callings: Vec<MessageFunctionCall>,
     ) -> Result<Vec<FunctionResponseMessage>, AssistantError> {
         let locked = self.0.simple_functions.lock().await;
 
@@ -165,10 +142,4 @@ struct AssistantInner {
     simple_functions: Mutex<HashMap<String, Box<dyn SimpleFunction + 'static>>>,
     system_role: String,
     sensitive_marker: String,
-}
-
-#[derive(Debug, Clone)]
-pub struct ConversationUpdate {
-    pub function_actions: Option<(FunctionCallsMessage, Vec<FunctionResponseMessage>)>,
-    pub assistant_response: AssistantMessage,
 }
