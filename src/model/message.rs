@@ -15,24 +15,33 @@ impl Message {
         Message::System(SystemMessage(text.into()))
     }
 
-    pub fn new_user(text: impl Into<String>) -> Message {
-        Message::User(UserMessage(text.into()))
+    pub fn new_user(text: impl Into<String>, name: Option<String>, language: Option<String>) -> Message {
+        Message::User(UserMessage {
+            message: text.into(),
+            name,
+            language,
+        })
     }
 
     pub fn new_function(function_name: impl Into<String>, text: impl Into<String>) -> Message {
         Message::Function(FunctionMessage(function_name.into(), text.into()))
     }
 
-    pub fn new_assistant(text: impl Into<String>, is_sensitive: bool) -> Message {
+    pub fn new_assistant(text: impl Into<String>, is_sensitive: bool, language: Option<String>) -> Message {
         Message::Assistant(AssistantMessage {
             text: text.into(),
             is_sensitive,
+            language,
         })
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct UserMessage(pub String);
+pub struct UserMessage {
+    pub message: String,
+    pub name: Option<String>,
+    pub language: Option<String>,
+}
 
 impl From<UserMessage> for Message {
     fn from(value: UserMessage) -> Message {
@@ -62,6 +71,7 @@ impl From<FunctionMessage> for Message {
 pub struct AssistantMessage {
     pub text: String,
     pub is_sensitive: bool,
+    pub language: Option<String>,
 }
 
 impl From<AssistantMessage> for Message {

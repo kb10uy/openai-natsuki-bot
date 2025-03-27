@@ -10,7 +10,10 @@ use std::sync::Arc;
 use async_openai::{
     Client,
     config::OpenAIConfig,
-    types::{ChatCompletionRequestFunctionMessage, ChatCompletionRequestMessage, CreateChatCompletionRequest},
+    types::{
+        ChatCompletionRequestFunctionMessage, ChatCompletionRequestMessage, ChatCompletionRequestUserMessage,
+        ChatCompletionRequestUserMessageContent, CreateChatCompletionRequest,
+    },
 };
 use futures::{FutureExt, future::BoxFuture};
 
@@ -76,7 +79,10 @@ impl ChatCompletionBackendInner {
 fn transform_message(message: &Message) -> ChatCompletionRequestMessage {
     match message {
         Message::System(system_message) => ChatCompletionRequestMessage::System(system_message.0.clone().into()),
-        Message::User(user_message) => ChatCompletionRequestMessage::User(user_message.0.clone().into()),
+        Message::User(user_message) => ChatCompletionRequestMessage::User(ChatCompletionRequestUserMessage {
+            content: ChatCompletionRequestUserMessageContent::Text(user_message.message.clone()),
+            name: user_message.name.clone(),
+        }),
         Message::Function(function_message) => {
             ChatCompletionRequestMessage::Function(ChatCompletionRequestFunctionMessage {
                 name: function_message.0.clone(),

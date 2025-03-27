@@ -40,6 +40,7 @@ impl Assistant {
         let assistant_response = AssistantMessage {
             text: response.text,
             is_sensitive: response.sensitive,
+            language: Some(response.language),
         };
 
         Ok(ConversationUpdate { assistant_response })
