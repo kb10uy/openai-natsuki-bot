@@ -40,6 +40,13 @@ pub enum AssistantError {
         StorageError,
     ),
 
+    #[error("function error: {0}")]
+    Function(
+        #[source]
+        #[from]
+        FunctionError,
+    ),
+
     /// 期待されていた応答が存在しなかった。
     #[error("expected chat resnpose not found")]
     ChatResponseExpected,
@@ -69,6 +76,13 @@ pub enum StorageError {
     #[error("backend error: {0}")]
     Backend(#[source] Box<dyn StdError + Send + Sync + 'static>),
 
+    #[error("serialization error: {0}")]
+    Serialization(#[source] Box<dyn StdError + Send + Sync + 'static>),
+}
+
+/// Function 層のエラー。
+#[derive(Debug, ThisError)]
+pub enum FunctionError {
     #[error("serialization error: {0}")]
     Serialization(#[source] Box<dyn StdError + Send + Sync + 'static>),
 }

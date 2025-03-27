@@ -9,6 +9,7 @@ mod text;
 use crate::{
     assistant::Assistant,
     impls::{
+        function::SelfInfo,
         llm::create_llm,
         platform::{CliPlatform, MastodonPlatform},
         storage::create_storage,
@@ -41,6 +42,8 @@ async fn main() -> Result<()> {
     let llm = create_llm(&config.llm).await?;
     let storage = create_storage(&config.storage).await?;
     let assistant = Assistant::new(assistant_identity, llm, storage);
+
+    assistant.add_simple_function(SelfInfo {}).await;
 
     let mut platform_tasks = vec![];
 

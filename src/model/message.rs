@@ -1,11 +1,13 @@
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 /// `Conversation` 中の単一メッセージ。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Message {
     System(SystemMessage),
     User(UserMessage),
-    Function(FunctionMessage),
+    FunctionCalls(FunctionCallsMessage),
+    FunctionResponse(FunctionResponseMessage),
     Assistant(AssistantMessage),
 }
 
@@ -23,8 +25,16 @@ impl Message {
         })
     }
 
-    pub fn new_function(function_name: impl Into<String>, text: impl Into<String>) -> Message {
-        Message::Function(FunctionMessage(function_name.into(), text.into()))
+    pub fn new_function_calls(calls: impl IntoIterator<Item = MessageFunctionCall>) -> Message {
+        Message::FunctionCalls(FunctionCallsMessage(calls.into_iter().collect()))
+    }
+
+    pub fn new_function_response(id: impl Into<String>, name: impl Into<String>, result: impl Into<Value>) -> Message {
+        Message::FunctionResponse(FunctionResponseMessage {
+            id: id.into(),
+            name: name.into(),
+            result: result.into(),
+        })
     }
 
     pub fn new_assistant(text: impl Into<String>, is_sensitive: bool, language: Option<String>) -> Message {
@@ -36,7 +46,7 @@ impl Message {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 pub struct UserMessage {
     pub message: String,
     pub name: Option<String>,
@@ -49,7 +59,7 @@ impl From<UserMessage> for Message {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 pub struct SystemMessage(pub String);
 
 impl From<SystemMessage> for Message {
@@ -58,16 +68,36 @@ impl From<SystemMessage> for Message {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct FunctionMessage(pub String, pub String);
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+pub struct FunctionCallsMessage(pub Vec<MessageFunctionCall>);
 
-impl From<FunctionMessage> for Message {
-    fn from(value: FunctionMessage) -> Message {
-        Message::Function(value)
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+pub struct MessageFunctionCall {
+    pub id: String,
+    pub name: String,
+    pub arguments: Value,
+}
+
+impl From<FunctionCallsMessage> for Message {
+    fn from(value: FunctionCallsMessage) -> Message {
+        Message::FunctionCalls(value)
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+pub struct FunctionResponseMessage {
+    pub id: String,
+    pub name: String,
+    pub result: Value,
+}
+
+impl From<FunctionResponseMessage> for Message {
+    fn from(value: FunctionResponseMessage) -> Message {
+        Message::FunctionResponse(value)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 pub struct AssistantMessage {
     pub text: String,
     pub is_sensitive: bool,

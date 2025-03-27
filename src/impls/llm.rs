@@ -6,7 +6,6 @@ use crate::{
     error::LlmError,
     model::{
         config::{AppConfigLlm, AppConfigLlmBackend, AppConfigLlmOpenaiApi},
-        conversation::ASSISTANT_RESPONSE_SCHEMA,
         schema::{DescribedSchema, DescribedSchemaType},
     },
     specs::llm::Llm,
@@ -14,9 +13,25 @@ use crate::{
 
 use std::{collections::HashMap, sync::LazyLock};
 
-use async_openai::{error::OpenAIError, types::ResponseFormatJsonSchema};
+use async_openai::error::OpenAIError;
 use reqwest::Error as ReqwestError;
-use serde_json::{Value as JsonValue, json};
+use serde_json::{Error as SerdeJsonError, Value, json};
+
+// MEMO: proc macro で serde のついでに作った方が面白い
+pub static ASSISTANT_RESPONSE_SCHEMA: LazyLock<DescribedSchema> = LazyLock::new(|| {
+    DescribedSchema::object(
+        "response",
+        "response as assistant",
+        vec![
+            DescribedSchema::string(
+                "text",
+                "ユーザーへの主要な回答内容。夏稀としてふるまって回答してください。",
+            ),
+            DescribedSchema::string("language", "`text` フィールドに対応する IETF BCP47 言語タグ。"),
+            DescribedSchema::boolean("sensitive", "`text` フィールドが性的な話題を含むかどうか。"),
+        ],
+    )
+});
 
 pub async fn create_llm(config: &AppConfigLlm) -> Result<Box<dyn Llm + 'static>, LlmError> {
     match config.backend {
@@ -27,19 +42,7 @@ pub async fn create_llm(config: &AppConfigLlm) -> Result<Box<dyn Llm + 'static>,
     }
 }
 
-impl From<OpenAIError> for LlmError {
-    fn from(value: OpenAIError) -> Self {
-        LlmError::Backend(value.into())
-    }
-}
-
-impl From<ReqwestError> for LlmError {
-    fn from(value: ReqwestError) -> Self {
-        LlmError::Communication(value.into())
-    }
-}
-
-fn convert_schema(schema: &DescribedSchema) -> JsonValue {
+fn convert_json_schema(schema: &DescribedSchema) -> Value {
     match &schema.field_type {
         DescribedSchemaType::Integer => json!({
             "type": "integer",
@@ -58,7 +61,10 @@ fn convert_schema(schema: &DescribedSchema) -> JsonValue {
             "description": schema.description,
         }),
         DescribedSchemaType::Object(fields) => {
-            let properties: HashMap<_, _> = fields.iter().map(|f| (f.name.clone(), convert_schema(f))).collect();
+            let properties: HashMap<_, _> = fields
+                .iter()
+                .map(|f| (f.name.clone(), convert_json_schema(f)))
+                .collect();
             let keys: Vec<_> = properties.keys().cloned().collect();
             json!({
                 "type": "object",
@@ -70,9 +76,20 @@ fn convert_schema(schema: &DescribedSchema) -> JsonValue {
     }
 }
 
-static RESPONSE_JSON_SCHEMA: LazyLock<ResponseFormatJsonSchema> = LazyLock::new(|| ResponseFormatJsonSchema {
-    name: "response".into(),
-    description: Some("response from assistant".into()),
-    schema: Some(convert_schema(&ASSISTANT_RESPONSE_SCHEMA)),
-    strict: Some(true),
-});
+impl From<OpenAIError> for LlmError {
+    fn from(value: OpenAIError) -> Self {
+        LlmError::Backend(value.into())
+    }
+}
+
+impl From<ReqwestError> for LlmError {
+    fn from(value: ReqwestError) -> Self {
+        LlmError::Communication(value.into())
+    }
+}
+
+impl From<SerdeJsonError> for LlmError {
+    fn from(value: SerdeJsonError) -> Self {
+        LlmError::ResponseFormat(value.into())
+    }
+}

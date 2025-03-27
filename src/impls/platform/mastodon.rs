@@ -2,7 +2,7 @@ use crate::{
     USER_AGENT,
     assistant::Assistant,
     error::PlatformError,
-    model::{config::AppConfigPlatformMastodon, message::Message},
+    model::{config::AppConfigPlatformMastodon, message::UserMessage},
     specs::platform::ConversationPlatform,
     text::markdown::sanitize_markdown_mastodon,
 };
@@ -113,7 +113,7 @@ impl MastodonPlatformInner {
 
         // Conversation の検索
         let context_key = status.in_reply_to_id.map(|si| si.to_string());
-        let mut conversation = match context_key {
+        let conversation = match context_key {
             None => {
                 info!("creating new conversation");
                 self.assistant.new_conversation()
@@ -131,22 +131,19 @@ impl MastodonPlatformInner {
         };
 
         // Conversation の更新・呼出し
-        conversation.push_message(Message::new_user(
-            stripped,
-            None,
-            status.language.and_then(|l| l.to_639_1()).map(|l| l.to_string()),
-        ));
-        let update = self.assistant.process_conversation(&conversation).await?;
-        let assistant_response = update.assistant_response;
-        info!(
-            "夏稀[{}]: {:?}",
-            assistant_response.is_sensitive, assistant_response.text
-        );
+        let user_message = UserMessage {
+            message: stripped.to_string(),
+            language: status.language.and_then(|l| l.to_639_1()).map(|l| l.to_string()),
+            ..Default::default()
+        };
+        let conversation_update = self.assistant.process_conversation(conversation, user_message).await?;
+        let assistant_message = conversation_update.assistant_message();
+        info!("夏稀[{}]: {:?}", assistant_message.is_sensitive, assistant_message.text);
 
         // リプライ構築
         // 公開範囲は最大 unlisted でリプライ元に合わせる
         // CW はリプライ元があったらそのまま、ないときは要そぎぎなら付与
-        let mut sanitized_text = sanitize_markdown_mastodon(&assistant_response.text);
+        let mut sanitized_text = sanitize_markdown_mastodon(&assistant_message.text);
         if sanitized_text.chars().count() > self.max_length {
             sanitized_text = sanitized_text.chars().take(self.max_length).collect();
             sanitized_text.push_str("...(omitted)");
@@ -157,7 +154,7 @@ impl MastodonPlatformInner {
             otherwise => otherwise,
         };
         let reply_spoiler = match &status.spoiler_text[..] {
-            "" => assistant_response.is_sensitive.then(|| self.sensitive_spoiler.clone()),
+            "" => assistant_message.is_sensitive.then(|| self.sensitive_spoiler.clone()),
             _ => Some(status.spoiler_text),
         };
         let reply_status = NewStatus {
@@ -170,11 +167,10 @@ impl MastodonPlatformInner {
         let replied_status = self.mastodon.new_status(reply_status).await?;
 
         // Conversation/history の更新
-        conversation.push_message(assistant_response.into());
-
+        let updated_conversation = conversation_update.finish();
         let new_history_id = replied_status.id.as_ref();
         self.assistant
-            .save_conversation(&conversation, PLATFORM_KEY, new_history_id)
+            .save_conversation(&updated_conversation, PLATFORM_KEY, new_history_id)
             .await?;
 
         Ok(())

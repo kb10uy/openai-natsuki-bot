@@ -1,5 +1,5 @@
 use crate::{
-    assistant::Assistant, error::PlatformError, model::message::Message, specs::platform::ConversationPlatform,
+    assistant::Assistant, error::PlatformError, model::message::UserMessage, specs::platform::ConversationPlatform,
 };
 
 use std::io::stdin;
@@ -32,10 +32,15 @@ impl ConversationPlatform for CliPlatform {
             // 応答ループ
             while let Some(input) = rx.recv().await {
                 info!("sending {input}");
-                conversation.push_message(Message::new_user(input, None, None));
-                let conversation_update = assistant.process_conversation(&conversation).await?;
-                println!(">> {}", conversation_update.assistant_response.text.bold().white());
-                conversation.push_message(conversation_update.assistant_response.into());
+
+                let user_message = UserMessage {
+                    message: input,
+                    ..Default::default()
+                };
+                let conversation_update = assistant.process_conversation(conversation, user_message).await?;
+
+                println!(">> {}", conversation_update.assistant_message().text.bold().white());
+                conversation = conversation_update.finish();
             }
             println!("channel closed");
 
