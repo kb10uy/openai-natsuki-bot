@@ -244,7 +244,7 @@ impl MastodonPlatformInner {
             let (temp_file, temp_path) = tempfile.into_parts();
             let mut async_file = File::from_std(temp_file);
             async_file.write_all(&image_data).await?;
-            let restored_file = async_file.into_std();
+            let restored_file = async_file.into_std().await;
             NamedTempFile::from_parts(restored_file, temp_path)
         };
         // アップロード
@@ -252,6 +252,8 @@ impl MastodonPlatformInner {
             .mastodon
             .media(restored_tempfile.path(), description.map(|d| d.to_string()))
             .await?;
+        // ここまで生き残らせる
+        drop(restored_tempfile);
 
         Ok(uploaded_attachment.id)
     }
