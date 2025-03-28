@@ -1,9 +1,6 @@
 use crate::{
     error::FunctionError,
-    model::{
-        config::AppConfigToolGetIllustUrl,
-        schema::DescribedSchema,
-    },
+    model::{config::AppConfigToolGetIllustUrl, schema::DescribedSchema},
     specs::function::simple::{SimpleFunction, SimpleFunctionDescriptor, SimpleFunctionResponse},
 };
 

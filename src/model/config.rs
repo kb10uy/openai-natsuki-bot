@@ -46,6 +46,7 @@ pub struct AppConfigPlatformMastodon {
 pub struct AppConfigPlatformDiscord {
     pub enabled: bool,
     pub token: String,
+    pub max_length: usize,
 }
 
 /// [tool]
