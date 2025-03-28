@@ -28,7 +28,6 @@ pub fn walk_mastodon(writer: &mut impl Write, children: Vec<Node>) -> FmtResult 
             Node::InlineCode(inline_code) => write!(writer, "{}", inline_code.value)?,
             Node::InlineMath(inline_math) => write!(writer, "{}", inline_math.value)?,
             Node::Link(link) => write!(writer, "{}", strip_utm_source(&link.url))?,
-            Node::Image(image) => write!(writer, "{}", strip_utm_source(&image.url))?,
 
             Node::Paragraph(paragraph) => {
                 walk_mastodon(writer, paragraph.children)?;

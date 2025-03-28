@@ -1,6 +1,7 @@
 use crate::model::message::{AssistantMessage, Message, UserMessage};
 
 use serde::{Deserialize, Serialize};
+use url::Url;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -38,26 +39,41 @@ impl IncompleteConversation {
         }
     }
 
-    pub fn finish(self, last_assistant_message: AssistantMessage) -> ConversationUpdate {
+    pub fn finish(
+        self,
+        last_assistant_message: AssistantMessage,
+        attachments: Vec<ConversationAttachment>,
+    ) -> ConversationUpdate {
         ConversationUpdate {
             conversation: Conversation {
                 id: self.id,
                 messages: self.latest_messages,
             },
             assistant_message: last_assistant_message,
+            attachments,
         }
     }
+}
+
+#[derive(Debug, Clone)]
+pub enum ConversationAttachment {
+    Image { url: Url, description: Option<String> },
 }
 
 #[derive(Debug, Clone)]
 pub struct ConversationUpdate {
     conversation: Conversation,
     assistant_message: AssistantMessage,
+    attachments: Vec<ConversationAttachment>,
 }
 
 impl ConversationUpdate {
     pub fn assistant_message(&self) -> &AssistantMessage {
         &self.assistant_message
+    }
+
+    pub fn attachments(&self) -> &[ConversationAttachment] {
+        &self.attachments
     }
 
     pub fn finish(mut self) -> Conversation {

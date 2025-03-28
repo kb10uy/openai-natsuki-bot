@@ -1,10 +1,23 @@
-use std::process::Command;
+use std::{env::var, process::Command};
+
+use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
 fn main() {
     export_git_commit_hash();
+    export_built_at_datetime();
+}
+
+fn export_built_at_datetime() {
+    let now = OffsetDateTime::now_local().expect("failed to fetch time");
+    let formatted = now.format(&Rfc3339).expect("failed to format time");
+    println!("cargo:rustc-env=BUILT_AT_DATETIME={formatted}");
 }
 
 fn export_git_commit_hash() {
+    if var("GIT_COMMIT_HASH").is_ok() {
+        return;
+    }
+
     let git_output = Command::new("git")
         .args(["rev-parse", "HEAD"])
         .output()

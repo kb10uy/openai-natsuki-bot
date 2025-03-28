@@ -85,4 +85,7 @@ pub enum StorageError {
 pub enum FunctionError {
     #[error("serialization error: {0}")]
     Serialization(#[source] Box<dyn StdError + Send + Sync + 'static>),
+
+    #[error("external error: {0}")]
+    External(#[source] Box<dyn StdError + Send + Sync + 'static>),
 }

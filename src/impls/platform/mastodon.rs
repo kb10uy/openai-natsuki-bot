@@ -2,7 +2,11 @@ use crate::{
     USER_AGENT,
     assistant::Assistant,
     error::PlatformError,
-    model::{config::AppConfigPlatformMastodon, message::UserMessage},
+    model::{
+        config::AppConfigPlatformMastodon,
+        conversation::ConversationAttachment,
+        message::{UserMessage, UserMessageContent},
+    },
     specs::platform::ConversationPlatform,
     text::markdown::sanitize_markdown_mastodon,
 };
@@ -14,10 +18,16 @@ use html2md::parse_html;
 use mastodon_async::{
     Error as MastodonError, Mastodon, NewStatus, Visibility,
     entities::{account::Account, event::Event, notification::Type as NotificationType, status::Status},
+    format_err,
+    prelude::MediaType,
 };
+use mastodon_async_entities::AttachmentId;
 use regex::Regex;
-use tokio::spawn;
-use tracing::{error, info};
+use reqwest::Client;
+use tempfile::NamedTempFile;
+use tokio::{fs::File, io::AsyncWriteExt, spawn};
+use tracing::{debug, error, info};
+use url::Url;
 
 const PLATFORM_KEY: &str = "mastodon";
 
@@ -39,11 +49,12 @@ impl MastodonPlatform {
             token: config_mastodon.token.clone().into(),
             ..Default::default()
         };
-        let mastodon = Mastodon::new(http_client, mastodon_data);
+        let mastodon = Mastodon::new(http_client.clone(), mastodon_data);
         let self_account = mastodon.verify_credentials().await?;
 
         Ok(MastodonPlatform(Arc::new(MastodonPlatformInner {
             assistant,
+            http_client,
             mastodon,
             self_account,
             sensitive_spoiler: config_mastodon.sensitive_spoiler.clone(),
@@ -62,6 +73,7 @@ impl ConversationPlatform for MastodonPlatform {
 #[derive(Debug)]
 struct MastodonPlatformInner {
     assistant: Assistant,
+    http_client: Client,
     mastodon: Mastodon,
     self_account: Account,
     sensitive_spoiler: String,
@@ -106,11 +118,6 @@ impl MastodonPlatformInner {
             return Ok(());
         }
 
-        // パース
-        let content_markdown = parse_html(&status.content);
-        let stripped = RE_HEAD_MENTION.replace_all(&content_markdown, "");
-        info!("[{}] {}: {:?}", status.id, status.account.acct, stripped);
-
         // Conversation の検索
         let context_key = status.in_reply_to_id.map(|si| si.to_string());
         let conversation = match context_key {
@@ -130,15 +137,52 @@ impl MastodonPlatformInner {
             }
         };
 
+        // パース
+        let content_markdown = parse_html(&status.content);
+        let stripped = RE_HEAD_MENTION.replace_all(&content_markdown, "");
+        let images: Vec<_> = status
+            .media_attachments
+            .into_iter()
+            .filter(|a| matches!(a.media_type, MediaType::Image | MediaType::Gifv))
+            .map(|atch| UserMessageContent::ImageUrl(atch.preview_url))
+            .collect();
+        info!(
+            "[{}] {}: {:?} ({} image(s))",
+            status.id,
+            status.account.acct,
+            stripped,
+            images.len()
+        );
+
+        let mut contents = vec![UserMessageContent::Text(stripped.to_string())];
+        contents.extend(images);
+
         // Conversation の更新・呼出し
         let user_message = UserMessage {
-            message: stripped.to_string(),
+            contents,
             language: status.language.and_then(|l| l.to_639_1()).map(|l| l.to_string()),
             ..Default::default()
         };
         let conversation_update = self.assistant.process_conversation(conversation, user_message).await?;
         let assistant_message = conversation_update.assistant_message();
-        info!("夏稀[{}]: {:?}", assistant_message.is_sensitive, assistant_message.text);
+        let attachments = conversation_update.attachments();
+        info!(
+            "夏稀[{}]: {:?} ({} attachment(s))",
+            assistant_message.is_sensitive,
+            assistant_message.text,
+            attachments.len()
+        );
+
+        // 添付メディア
+        let mut attachment_ids = vec![];
+        for attachment in attachments {
+            match attachment {
+                ConversationAttachment::Image { url, description } => {
+                    let image_id = self.upload_image(url, description.as_deref()).await?;
+                    attachment_ids.push(image_id);
+                }
+            }
+        }
 
         // リプライ構築
         // 公開範囲は最大 unlisted でリプライ元に合わせる
@@ -162,6 +206,7 @@ impl MastodonPlatformInner {
             visibility: Some(reply_visibility),
             in_reply_to_id: Some(status.id.to_string()),
             spoiler_text: reply_spoiler,
+            media_ids: Some(attachment_ids),
             ..Default::default()
         };
         let replied_status = self.mastodon.new_status(reply_status).await?;
@@ -174,6 +219,43 @@ impl MastodonPlatformInner {
             .await?;
 
         Ok(())
+    }
+
+    async fn upload_image(&self, url: &Url, description: Option<&str>) -> Result<AttachmentId, PlatformError> {
+        // ダウンロード
+        let response = self.http_client.get(url.to_string()).send().await?;
+        let image_data = response.bytes().await?;
+        let mime_type = infer::get(&image_data).map(|ft| ft.mime_type());
+
+        // tempfile に書き出し
+        let tempfile = match mime_type {
+            Some("image/jpeg") => NamedTempFile::with_suffix(".jpg")?,
+            Some("image/png") => NamedTempFile::with_suffix(".png")?,
+            Some("image/gif") => NamedTempFile::with_suffix(".gif")?,
+            _ => {
+                return Err(PlatformError::Communication(
+                    format_err!("unsupported image type: {mime_type:?}").into(),
+                ));
+            }
+        };
+        debug!("writing temporary image at {:?}", tempfile.path());
+        // tokio File にするので分解する
+        let restored_tempfile = {
+            let (temp_file, temp_path) = tempfile.into_parts();
+            let mut async_file = File::from_std(temp_file);
+            async_file.write_all(&image_data).await?;
+            let restored_file = async_file.into_std().await;
+            NamedTempFile::from_parts(restored_file, temp_path)
+        };
+        // アップロード
+        let uploaded_attachment = self
+            .mastodon
+            .media(restored_tempfile.path(), description.map(|d| d.to_string()))
+            .await?;
+        // ここまで生き残らせる
+        drop(restored_tempfile);
+
+        Ok(uploaded_attachment.id)
     }
 }
 

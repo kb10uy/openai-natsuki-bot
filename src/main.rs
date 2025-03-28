@@ -9,7 +9,7 @@ mod text;
 use crate::{
     assistant::Assistant,
     impls::{
-        function::SelfInfo,
+        function::{GetIllustUrl, ImageGenerator, LocalInfo, SelfInfo},
         llm::create_llm,
         platform::{CliPlatform, MastodonPlatform},
         storage::create_storage,
@@ -43,7 +43,18 @@ async fn main() -> Result<()> {
     let storage = create_storage(&config.storage).await?;
     let assistant = Assistant::new(assistant_identity, llm, storage);
 
-    assistant.add_simple_function(SelfInfo {}).await;
+    assistant.add_simple_function(SelfInfo::new()).await;
+    assistant.add_simple_function(LocalInfo::new()?).await;
+    if config.tool.image_generator.enabled {
+        assistant
+            .add_simple_function(ImageGenerator::new(&config.tool.image_generator)?)
+            .await;
+    }
+    if config.tool.get_illust_url.enabled {
+        assistant
+            .add_simple_function(GetIllustUrl::new(&config.tool.get_illust_url).await?)
+            .await;
+    }
 
     let mut platform_tasks = vec![];
 

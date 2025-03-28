@@ -7,7 +7,7 @@ use crate::{
     model::{
         config::AppConfigLlmOpenai,
         conversation::IncompleteConversation,
-        message::{Message, MessageFunctionCall},
+        message::{Message, MessageFunctionCall, UserMessageContent},
     },
     specs::{
         function::simple::SimpleFunctionDescriptor,
@@ -22,9 +22,10 @@ use async_openai::{
     config::OpenAIConfig,
     types::{
         ChatCompletionMessageToolCall, ChatCompletionRequestAssistantMessage, ChatCompletionRequestMessage,
+        ChatCompletionRequestMessageContentPartImage, ChatCompletionRequestMessageContentPartText,
         ChatCompletionRequestToolMessage, ChatCompletionRequestToolMessageContent, ChatCompletionRequestUserMessage,
-        ChatCompletionRequestUserMessageContent, ChatCompletionTool, ChatCompletionToolType,
-        CreateChatCompletionRequest, FunctionCall, FunctionObject, ResponseFormat,
+        ChatCompletionRequestUserMessageContent, ChatCompletionRequestUserMessageContentPart, ChatCompletionTool,
+        ChatCompletionToolType, CreateChatCompletionRequest, FunctionCall, FunctionObject, ImageUrl, ResponseFormat,
     },
 };
 use futures::{FutureExt, future::BoxFuture};
@@ -197,10 +198,30 @@ impl ChatCompletionBackendInner {
 fn transform_message(message: &Message) -> Result<ChatCompletionRequestMessage, LlmError> {
     let message = match message {
         Message::System(system_message) => ChatCompletionRequestMessage::System(system_message.0.clone().into()),
-        Message::User(user_message) => ChatCompletionRequestMessage::User(ChatCompletionRequestUserMessage {
-            content: ChatCompletionRequestUserMessageContent::Text(user_message.message.clone()),
-            name: user_message.name.clone(),
-        }),
+        Message::User(user_message) => {
+            let contents =
+                user_message
+                    .contents
+                    .iter()
+                    .map(|umc| match umc {
+                        UserMessageContent::Text(text) => ChatCompletionRequestUserMessageContentPart::Text(
+                            ChatCompletionRequestMessageContentPartText { text: text.to_string() },
+                        ),
+                        UserMessageContent::ImageUrl(url) => ChatCompletionRequestUserMessageContentPart::ImageUrl(
+                            ChatCompletionRequestMessageContentPartImage {
+                                image_url: ImageUrl {
+                                    url: url.to_string(),
+                                    ..Default::default()
+                                },
+                            },
+                        ),
+                    })
+                    .collect();
+            ChatCompletionRequestMessage::User(ChatCompletionRequestUserMessage {
+                content: ChatCompletionRequestUserMessageContent::Array(contents),
+                name: user_message.name.clone(),
+            })
+        }
         Message::Assistant(assistant_message) => {
             ChatCompletionRequestMessage::Assistant(assistant_message.text.clone().into())
         }
