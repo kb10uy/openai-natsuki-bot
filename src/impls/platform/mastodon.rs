@@ -18,14 +18,15 @@ use html2md::parse_html;
 use mastodon_async::{
     Error as MastodonError, Mastodon, NewStatus, Visibility,
     entities::{account::Account, event::Event, notification::Type as NotificationType, status::Status},
+    format_err,
     prelude::MediaType,
 };
 use mastodon_async_entities::AttachmentId;
 use regex::Regex;
-use reqwest::{Client, header::CONTENT_TYPE};
+use reqwest::Client;
 use tempfile::NamedTempFile;
 use tokio::{fs::File, io::AsyncWriteExt, spawn};
-use tracing::{error, info};
+use tracing::{debug, error, info};
 use url::Url;
 
 const PLATFORM_KEY: &str = "mastodon";
@@ -223,21 +224,21 @@ impl MastodonPlatformInner {
     async fn upload_image(&self, url: &Url, description: Option<&str>) -> Result<AttachmentId, PlatformError> {
         // ダウンロード
         let response = self.http_client.get(url.to_string()).send().await?;
-        let mime = match response.headers().get(CONTENT_TYPE) {
-            Some(v) => v
-                .to_str()
-                .map_err(|e| PlatformError::Communication(e.into()))?
-                .to_string(),
-            None => "image/png".to_string(),
-        };
         let image_data = response.bytes().await?;
+        let mime_type = infer::get(&image_data).map(|ft| ft.mime_type());
 
         // tempfile に書き出し
-        let tempfile = match mime.split('/').last().expect("must exist value") {
-            "jpeg" | "jpg" => NamedTempFile::with_suffix(".jpg")?,
-            "png" => NamedTempFile::with_suffix(".png")?,
-            _ => NamedTempFile::with_suffix(".png")?,
+        let tempfile = match mime_type {
+            Some("image/jpeg") => NamedTempFile::with_suffix(".jpg")?,
+            Some("image/png") => NamedTempFile::with_suffix(".png")?,
+            Some("image/gif") => NamedTempFile::with_suffix(".gif")?,
+            _ => {
+                return Err(PlatformError::Communication(
+                    format_err!("unsupported image type: {mime_type:?}").into(),
+                ));
+            }
         };
+        debug!("writing temporary image at {:?}", tempfile.path());
         // tokio File にするので分解する
         let restored_tempfile = {
             let (temp_file, temp_path) = tempfile.into_parts();
