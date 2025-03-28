@@ -5,5 +5,4 @@ services:
       TZ: "Asia/Tokyo"
       RUST_LOG: "info,mastodon_async=warn"
     volumes:
-      - "./config.toml:/config.toml:ro"
-      - "./conversations.sqlite3:/conversations.sqlite3"
+      - "./data:/data"
