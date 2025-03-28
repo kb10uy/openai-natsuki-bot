@@ -3,7 +3,8 @@ services:
     build:
       context: "."
       args:
-        GIT_COMMIT_HASH: ${GIT_COMMIT_HASH}
+        GIT_COMMIT_HASH: "unknown"
+    stop_grace_period: "2s"
     environment:
       TZ: "Asia/Tokyo"
       RUST_LOG: "info,mastodon_async=warn"
