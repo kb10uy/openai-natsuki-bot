@@ -6,6 +6,7 @@ use serde::Deserialize;
 #[derive(Debug, Clone, Deserialize)]
 pub struct AppConfig {
     pub platform: AppConfigPlatform,
+    pub tool: AppConfigTool,
     pub llm: AppConfigLlm,
     pub storage: AppConfigStorage,
     pub assistant: AppConfigAssistant,
@@ -35,6 +36,22 @@ pub struct AppConfigPlatformMastodon {
     pub token: String,
     pub sensitive_spoiler: String,
     pub max_length: usize,
+}
+
+/// [tool]
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct AppConfigTool {
+    #[serde(default = "Default::default")]
+    pub image_generator: AppConfigToolImageGenerator,
+}
+
+/// [tool.image_generator]
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct AppConfigToolImageGenerator {
+    pub enabled: bool,
+    pub endpoint: String,
+    pub token: String,
+    pub model: String,
 }
 
 /// [storage]

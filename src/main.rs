@@ -9,7 +9,7 @@ mod text;
 use crate::{
     assistant::Assistant,
     impls::{
-        function::{LocalInfo, SelfInfo},
+        function::{ImageGenerator, LocalInfo, SelfInfo},
         llm::create_llm,
         platform::{CliPlatform, MastodonPlatform},
         storage::create_storage,
@@ -45,6 +45,11 @@ async fn main() -> Result<()> {
 
     assistant.add_simple_function(SelfInfo::new()).await;
     assistant.add_simple_function(LocalInfo::new()?).await;
+    if config.tool.image_generator.enabled {
+        assistant
+            .add_simple_function(ImageGenerator::new(&config.tool.image_generator)?)
+            .await;
+    }
 
     let mut platform_tasks = vec![];
 
