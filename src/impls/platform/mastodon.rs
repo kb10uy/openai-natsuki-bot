@@ -17,11 +17,10 @@ use futures::{future::BoxFuture, prelude::*};
 use html2md::parse_html;
 use mastodon_async::{
     Error as MastodonError, Mastodon, NewStatus, Visibility,
-    entities::{account::Account, event::Event, notification::Type as NotificationType, status::Status},
+    entities::{AttachmentId, account::Account, event::Event, notification::Type as NotificationType, status::Status},
     format_err,
     prelude::MediaType,
 };
-use mastodon_async_entities::AttachmentId;
 use regex::Regex;
 use reqwest::Client;
 use tempfile::NamedTempFile;
