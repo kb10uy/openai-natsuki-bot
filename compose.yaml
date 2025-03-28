@@ -1,6 +1,9 @@
 services:
   bot:
-    build: "."
+    build:
+      context: "."
+      args:
+        GIT_COMMIT_HASH: ${GIT_COMMIT_HASH}
     environment:
       TZ: "Asia/Tokyo"
       RUST_LOG: "info,mastodon_async=warn"

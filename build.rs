@@ -1,4 +1,4 @@
-use std::process::Command;
+use std::{env::var, process::Command};
 
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
@@ -14,6 +14,10 @@ fn export_built_at_datetime() {
 }
 
 fn export_git_commit_hash() {
+    if var("GIT_COMMIT_HASH").is_ok() {
+        return;
+    }
+
     let git_output = Command::new("git")
         .args(["rev-parse", "HEAD"])
         .output()
