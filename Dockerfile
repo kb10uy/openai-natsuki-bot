@@ -5,4 +5,5 @@ RUN cargo build --release
 
 FROM gcr.io/distroless/cc-debian12
 COPY --from=builder /build/target/release/llm-natsuki-bot /
+USER nonroot
 CMD [ "/llm-natsuki-bot" ]

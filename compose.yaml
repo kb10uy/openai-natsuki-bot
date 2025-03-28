@@ -1,9 +1,8 @@
 services:
   bot:
     build: "."
-    user: "1000:1000"
     environment:
       TZ: "Asia/Tokyo"
     volumes:
-      - "./config.toml:/config.toml"
+      - "./config.toml:/config.toml:ro"
       - "./conversations.sqlite3:/conversations.sqlite3"
