@@ -28,7 +28,7 @@ impl SimpleFunction for ImageGenerator {
             name: "image_generator".to_string(),
             description: r#"
                 プロンプトの入力から、AI を利用して画像を生成します。
-                レスポンスの image_url は返答文に含めず、画像自体は指示代名詞で指してください。
+                生成された画像の URL は返答文に含めないでください。
             "#
             .to_string(),
             parameters: DescribedSchema::object(
@@ -72,11 +72,14 @@ impl ImageGenerator {
 
         info!("generating image with {prompt:?}");
         let request = CreateImageRequest {
-            prompt,
+            prompt: prompt.clone(),
             model: Some(ImageModel::Other(self.model.clone())),
             ..Default::default()
         };
-        let response = self.client.images().create(request).await?;
+        let response = match self.client.images().create(request).await {
+            Ok(r) => r,
+            Err(e) => return make_error_value(&e.to_string()),
+        };
         let Some(first_image) = response.data.first() else {
             return make_error_value("no image was generated");
         };
@@ -85,11 +88,15 @@ impl ImageGenerator {
         };
 
         let image_url = Url::parse(url)?;
+        let revised_prompt = revised_prompt.as_ref().unwrap_or(&prompt).to_string();
         let function_response = GenerationResponse {
             image_url: image_url.clone(),
-            revised_prompt: revised_prompt.as_deref().unwrap_or_default().to_string(),
+            revised_prompt: revised_prompt.clone(),
         };
-        let attachment = ConversationAttachment::Image(image_url);
+        let attachment = ConversationAttachment::Image {
+            url: image_url,
+            description: Some(revised_prompt),
+        };
         Ok(SimpleFunctionResponse {
             result: serde_json::to_value(function_response)?,
             attachments: vec![attachment],

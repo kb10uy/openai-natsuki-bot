@@ -57,7 +57,7 @@ impl IncompleteConversation {
 
 #[derive(Debug, Clone)]
 pub enum ConversationAttachment {
-    Image(Url),
+    Image { url: Url, description: Option<String> },
 }
 
 #[derive(Debug, Clone)]

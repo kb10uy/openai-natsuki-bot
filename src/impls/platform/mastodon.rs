@@ -4,6 +4,7 @@ use crate::{
     error::PlatformError,
     model::{
         config::AppConfigPlatformMastodon,
+        conversation::ConversationAttachment,
         message::{UserMessage, UserMessageContent},
     },
     specs::platform::ConversationPlatform,
@@ -19,9 +20,13 @@ use mastodon_async::{
     entities::{account::Account, event::Event, notification::Type as NotificationType, status::Status},
     prelude::MediaType,
 };
+use mastodon_async_entities::AttachmentId;
 use regex::Regex;
-use tokio::spawn;
+use reqwest::{Client, header::CONTENT_TYPE};
+use tempfile::NamedTempFile;
+use tokio::{fs::File, io::AsyncWriteExt, spawn};
 use tracing::{error, info};
+use url::Url;
 
 const PLATFORM_KEY: &str = "mastodon";
 
@@ -43,11 +48,12 @@ impl MastodonPlatform {
             token: config_mastodon.token.clone().into(),
             ..Default::default()
         };
-        let mastodon = Mastodon::new(http_client, mastodon_data);
+        let mastodon = Mastodon::new(http_client.clone(), mastodon_data);
         let self_account = mastodon.verify_credentials().await?;
 
         Ok(MastodonPlatform(Arc::new(MastodonPlatformInner {
             assistant,
+            http_client,
             mastodon,
             self_account,
             sensitive_spoiler: config_mastodon.sensitive_spoiler.clone(),
@@ -66,6 +72,7 @@ impl ConversationPlatform for MastodonPlatform {
 #[derive(Debug)]
 struct MastodonPlatformInner {
     assistant: Assistant,
+    http_client: Client,
     mastodon: Mastodon,
     self_account: Account,
     sensitive_spoiler: String,
@@ -157,7 +164,24 @@ impl MastodonPlatformInner {
         };
         let conversation_update = self.assistant.process_conversation(conversation, user_message).await?;
         let assistant_message = conversation_update.assistant_message();
-        info!("夏稀[{}]: {:?}", assistant_message.is_sensitive, assistant_message.text);
+        let attachments = conversation_update.attachments();
+        info!(
+            "夏稀[{}]: {:?} ({} attachment(s))",
+            assistant_message.is_sensitive,
+            assistant_message.text,
+            attachments.len()
+        );
+
+        // 添付メディア
+        let mut attachment_ids = vec![];
+        for attachment in attachments {
+            match attachment {
+                ConversationAttachment::Image { url, description } => {
+                    let image_id = self.upload_image(url, description.as_deref()).await?;
+                    attachment_ids.push(image_id);
+                }
+            }
+        }
 
         // リプライ構築
         // 公開範囲は最大 unlisted でリプライ元に合わせる
@@ -181,6 +205,7 @@ impl MastodonPlatformInner {
             visibility: Some(reply_visibility),
             in_reply_to_id: Some(status.id.to_string()),
             spoiler_text: reply_spoiler,
+            media_ids: Some(attachment_ids),
             ..Default::default()
         };
         let replied_status = self.mastodon.new_status(reply_status).await?;
@@ -193,6 +218,41 @@ impl MastodonPlatformInner {
             .await?;
 
         Ok(())
+    }
+
+    async fn upload_image(&self, url: &Url, description: Option<&str>) -> Result<AttachmentId, PlatformError> {
+        // ダウンロード
+        let response = self.http_client.get(url.to_string()).send().await?;
+        let mime = match response.headers().get(CONTENT_TYPE) {
+            Some(v) => v
+                .to_str()
+                .map_err(|e| PlatformError::Communication(e.into()))?
+                .to_string(),
+            None => "image/png".to_string(),
+        };
+        let image_data = response.bytes().await?;
+
+        // tempfile に書き出し
+        let tempfile = match mime.split('/').last().expect("must exist value") {
+            "jpeg" | "jpg" => NamedTempFile::with_suffix(".jpg")?,
+            "png" => NamedTempFile::with_suffix(".png")?,
+            _ => NamedTempFile::with_suffix(".png")?,
+        };
+        // tokio File にするので分解する
+        let restored_tempfile = {
+            let (temp_file, temp_path) = tempfile.into_parts();
+            let mut async_file = File::from_std(temp_file);
+            async_file.write_all(&image_data).await?;
+            let restored_file = async_file.into_std();
+            NamedTempFile::from_parts(restored_file, temp_path)
+        };
+        // アップロード
+        let uploaded_attachment = self
+            .mastodon
+            .media(restored_tempfile.path(), description.map(|d| d.to_string()))
+            .await?;
+
+        Ok(uploaded_attachment.id)
     }
 }
 
