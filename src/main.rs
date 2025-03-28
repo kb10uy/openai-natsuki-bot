@@ -9,7 +9,7 @@ mod text;
 use crate::{
     assistant::Assistant,
     impls::{
-        function::{ImageGenerator, LocalInfo, SelfInfo},
+        function::{GetIllustUrl, ImageGenerator, LocalInfo, SelfInfo},
         llm::create_llm,
         platform::{CliPlatform, MastodonPlatform},
         storage::create_storage,
@@ -48,6 +48,11 @@ async fn main() -> Result<()> {
     if config.tool.image_generator.enabled {
         assistant
             .add_simple_function(ImageGenerator::new(&config.tool.image_generator)?)
+            .await;
+    }
+    if config.tool.get_illust_url.enabled {
+        assistant
+            .add_simple_function(GetIllustUrl::new(&config.tool.get_illust_url).await?)
             .await;
     }
 

@@ -43,6 +43,9 @@ pub struct AppConfigPlatformMastodon {
 pub struct AppConfigTool {
     #[serde(default = "Default::default")]
     pub image_generator: AppConfigToolImageGenerator,
+
+    #[serde(default = "Default::default")]
+    pub get_illust_url: AppConfigToolGetIllustUrl,
 }
 
 /// [tool.image_generator]
@@ -52,6 +55,13 @@ pub struct AppConfigToolImageGenerator {
     pub endpoint: String,
     pub token: String,
     pub model: String,
+}
+
+/// [tool.get_illust_url]
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct AppConfigToolGetIllustUrl {
+    pub enabled: bool,
+    pub database_filepath: String,
 }
 
 /// [storage]
