@@ -1,5 +1,5 @@
 [package]
-name = "lnb-mastdon-client"
+name = "lnb-mastodon-client"
 version = "0.1.0"
 edition = "2024"
 

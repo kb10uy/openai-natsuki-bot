@@ -1,7 +1,7 @@
 use crate::{
     error::LlmError,
+    interface::function::simple::SimpleFunctionDescriptor,
     model::{conversation::IncompleteConversation, message::MessageFunctionCall},
-    specs::function::simple::SimpleFunctionDescriptor,
 };
 
 use std::fmt::Debug;
