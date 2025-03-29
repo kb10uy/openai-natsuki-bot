@@ -8,6 +8,8 @@ members = ["lnb-core", "lnb-server", "lnb-mastodon-client", "lnb-cli-client"]
 
 [workspace.dependencies]
 lnb-core = { path = "./lnb-core" }
+lnb-mastodon-client = { path = "./lnb-mastodon-client" }
+lnb-cli-client = { path = "./lnb-cli-client" }
 
 anyhow = "1.0.97"
 async-openai = "0.28.0"

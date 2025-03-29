@@ -9,7 +9,7 @@ pub enum PlatformError {
     Assistant(
         #[source]
         #[from]
-        AssistantError,
+        ServerError,
     ),
 
     #[error("communication failed: {0}")]
@@ -17,15 +17,11 @@ pub enum PlatformError {
 
     #[error("external error: {0}")]
     External(#[source] Box<dyn StdError + Send + Sync + 'static>),
-
-    /// 前提条件の不整合が発生した。
-    #[error("requirement(s) not met: {0}")]
-    ExpectationMismatch(String),
 }
 
 /// Assistant 層のエラー。
 #[derive(Debug, ThisError)]
-pub enum AssistantError {
+pub enum ServerError {
     #[error("LLM error: {0}")]
     Llm(
         #[source]

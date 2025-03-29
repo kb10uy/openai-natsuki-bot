@@ -1,4 +1,5 @@
+pub mod client;
 pub mod function;
 pub mod llm;
-pub mod platform;
+pub mod server;
 pub mod storage;

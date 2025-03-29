@@ -11,4 +11,4 @@ clap = { workspace = true }
 futures = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
-tracing_subscriber = { workspace = true }
+tracing-subscriber = { workspace = true }
