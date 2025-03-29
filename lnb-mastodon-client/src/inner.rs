@@ -30,7 +30,7 @@ use url::Url;
 const PLATFORM_KEY: &str = "mastodon";
 
 #[derive(Debug)]
-pub struct MastodonPlatformInner<S> {
+pub struct MastodonLnbClientInner<S> {
     assistant: S,
     http_client: Client,
     mastodon: Mastodon,
@@ -39,11 +39,11 @@ pub struct MastodonPlatformInner<S> {
     max_length: usize,
 }
 
-impl<S: LnbServer> MastodonPlatformInner<S> {
+impl<S: LnbServer> MastodonLnbClientInner<S> {
     pub async fn new(
         config_mastodon: &AppConfigPlatformMastodon,
         assistant: S,
-    ) -> Result<MastodonPlatformInner<S>, WrappedPlatformError> {
+    ) -> Result<MastodonLnbClientInner<S>, WrappedPlatformError> {
         // Mastodon クライアントと自己アカウント情報
         let http_client = reqwest::ClientBuilder::new().user_agent(APP_USER_AGENT).build()?;
         let mastodon_data = mastodon_async::Data {
@@ -54,7 +54,7 @@ impl<S: LnbServer> MastodonPlatformInner<S> {
         let mastodon = Mastodon::new(http_client.clone(), mastodon_data);
         let self_account = mastodon.verify_credentials().await?;
 
-        Ok(MastodonPlatformInner {
+        Ok(MastodonLnbClientInner {
             assistant,
             http_client,
             mastodon,

@@ -2,7 +2,7 @@ mod error;
 mod inner;
 mod text;
 
-use crate::inner::MastodonPlatformInner;
+use crate::inner::MastodonLnbClientInner;
 
 use std::sync::Arc;
 
@@ -14,22 +14,22 @@ use lnb_core::{
 };
 
 #[derive(Debug)]
-pub struct MastodonPlatform<S>(Arc<MastodonPlatformInner<S>>);
+pub struct MastodonLnbClient<S>(Arc<MastodonLnbClientInner<S>>);
 
-impl<S: LnbServer> MastodonPlatform<S> {
+impl<S: LnbServer> MastodonLnbClient<S> {
     pub async fn new(
         config_mastodon: &AppConfigPlatformMastodon,
         assistant: S,
-    ) -> Result<MastodonPlatform<S>, ClientError> {
-        let inner = match MastodonPlatformInner::new(config_mastodon, assistant).await {
+    ) -> Result<MastodonLnbClient<S>, ClientError> {
+        let inner = match MastodonLnbClientInner::new(config_mastodon, assistant).await {
             Ok(i) => i,
             Err(e) => return Err(e.into()),
         };
-        Ok(MastodonPlatform(Arc::new(inner)))
+        Ok(MastodonLnbClient(Arc::new(inner)))
     }
 }
 
-impl<S: LnbServer> LnbClient for MastodonPlatform<S> {
+impl<S: LnbServer> LnbClient for MastodonLnbClient<S> {
     fn execute(&self) -> BoxFuture<'static, Result<(), ClientError>> {
         let cloned_inner = self.0.clone();
         async {
