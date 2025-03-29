@@ -10,7 +10,7 @@ use url::Url;
 static RE_HEAD_MENTION: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#"^\s*<@\d+?>\s*"#).expect("invalid regex"));
 
 pub fn sanitize_discord_message(message: &str) -> String {
-    RE_HEAD_MENTION.replace(message, "")
+    RE_HEAD_MENTION.replace(message, "").to_string()
 }
 
 pub fn sanitize_markdown_for_discord(markdown_text: &str) -> String {
