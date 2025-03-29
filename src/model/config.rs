@@ -20,6 +20,9 @@ pub struct AppConfigPlatform {
 
     #[serde(default = "Default::default")]
     pub mastodon: AppConfigPlatformMastodon,
+
+    #[serde(default = "Default::default")]
+    pub discord: AppConfigPlatformDiscord,
 }
 
 /// [platform.cli]
@@ -35,6 +38,14 @@ pub struct AppConfigPlatformMastodon {
     pub server_url: String,
     pub token: String,
     pub sensitive_spoiler: String,
+    pub max_length: usize,
+}
+
+/// [platform.discord]
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct AppConfigPlatformDiscord {
+    pub enabled: bool,
+    pub token: String,
     pub max_length: usize,
 }
 

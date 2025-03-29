@@ -11,7 +11,7 @@ use crate::{
     impls::{
         function::{GetIllustUrl, ImageGenerator, LocalInfo, SelfInfo},
         llm::create_llm,
-        platform::{CliPlatform, MastodonPlatform},
+        platform::{CliPlatform, DiscordPlatform, MastodonPlatform},
         storage::create_storage,
     },
     model::config::AppConfig,
@@ -70,9 +70,16 @@ async fn main() -> Result<()> {
     if config.platform.mastodon.enabled {
         info!("starting Mastodon platform");
         let mastodon_platform = MastodonPlatform::new(&config.platform.mastodon, assistant.clone()).await?;
-        let mastodon_future = mastodon_platform.execute();
-        let mastodon_task = spawn(mastodon_future);
+        let mastodon_task = spawn(mastodon_platform.execute());
         platform_tasks.push(Box::new(mastodon_task));
+    }
+
+    // Discord
+    if config.platform.discord.enabled {
+        info!("starting Discord platform");
+        let discord_platform = DiscordPlatform::new(&config.platform.discord, assistant.clone()).await?;
+        let discord_task = spawn(discord_platform.execute());
+        platform_tasks.push(Box::new(discord_task));
     }
 
     join_all(platform_tasks).await;
