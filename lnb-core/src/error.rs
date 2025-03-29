@@ -7,11 +7,7 @@ use thiserror::Error as ThisError;
 pub enum ClientError {
     /// Server からのエラー。
     #[error("assistant error: {0}")]
-    Server(
-        #[source]
-        #[from]
-        ServerError,
-    ),
+    Server(#[from] ServerError),
 
     /// 通信関連のエラー。
     #[error("communication failed: {0}")]
@@ -26,25 +22,13 @@ pub enum ClientError {
 #[derive(Debug, ThisError)]
 pub enum ServerError {
     #[error("LLM error: {0}")]
-    Llm(
-        #[source]
-        #[from]
-        LlmError,
-    ),
+    Llm(#[from] LlmError),
 
     #[error("storage error: {0}")]
-    Storage(
-        #[source]
-        #[from]
-        StorageError,
-    ),
+    Storage(#[from] StorageError),
 
     #[error("function error: {0}")]
-    Function(
-        #[source]
-        #[from]
-        FunctionError,
-    ),
+    Function(#[from] FunctionError),
 
     /// 期待されていた応答が存在しなかった。
     #[error("expected chat resnpose not found")]
