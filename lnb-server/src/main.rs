@@ -1,16 +1,12 @@
-mod assistant;
 mod cli;
-mod impls;
 mod natsuki;
 
-use crate::{
-    impls::{
-        function::{GetIllustUrl, ImageGenerator, LocalInfo, SelfInfo},
-        llm::create_llm,
-        platform::{CliPlatform, DiscordPlatform, MastodonPlatform},
-        storage::create_storage,
-    },
-    natsuki::Natsuki,
+use crate::natsuki::{
+    Natsuki,
+    function::{GetIllustUrl, ImageGenerator, LocalInfo, SelfInfo},
+    llm::create_llm,
+    platform::{CliPlatform, DiscordPlatform, MastodonPlatform},
+    storage::create_storage,
 };
 
 use std::path::Path;
@@ -34,7 +30,7 @@ async fn main() -> Result<()> {
 
     let llm = create_llm(&config.llm).await?;
     let storage = create_storage(&config.storage).await?;
-    let natsuki = Natsuki::new(assistant_identity, llm, storage);
+    let natsuki = Natsuki::new(assistant_identity, llm, storage).await?;
 
     natsuki.add_simple_function(SelfInfo::new()).await;
     natsuki.add_simple_function(LocalInfo::new()?).await;

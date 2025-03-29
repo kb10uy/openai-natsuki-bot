@@ -1,5 +1,5 @@
 use crate::{
-    error::{MastodonClientError, WrappedPlatformError},
+    error::{MastodonClientError, WrappedClientError},
     text::{sanitize_markdown_for_mastodon, sanitize_mention_html_from_mastodon},
 };
 
@@ -43,7 +43,7 @@ impl<S: LnbServer> MastodonLnbClientInner<S> {
     pub async fn new(
         config_mastodon: &AppConfigPlatformMastodon,
         assistant: S,
-    ) -> Result<MastodonLnbClientInner<S>, WrappedPlatformError> {
+    ) -> Result<MastodonLnbClientInner<S>, WrappedClientError> {
         // Mastodon クライアントと自己アカウント情報
         let http_client = reqwest::ClientBuilder::new().user_agent(APP_USER_AGENT).build()?;
         let mastodon_data = mastodon_async::Data {
@@ -64,7 +64,7 @@ impl<S: LnbServer> MastodonLnbClientInner<S> {
         })
     }
 
-    pub async fn execute(self: Arc<Self>) -> Result<(), WrappedPlatformError> {
+    pub async fn execute(self: Arc<Self>) -> Result<(), WrappedClientError> {
         let user_stream = self.mastodon.stream_user().await?;
         user_stream
             .try_for_each(async |(e, _)| {
@@ -96,7 +96,7 @@ impl<S: LnbServer> MastodonLnbClientInner<S> {
         error!("mastodon event process reported error: {err}");
     }
 
-    async fn process_status(&self, status: Status) -> Result<(), WrappedPlatformError> {
+    async fn process_status(&self, status: Status) -> Result<(), WrappedClientError> {
         // フィルタリング(bot flag と自分には応答しない)
         if status.account.bot || status.account.id == self.self_account.id {
             return Ok(());
@@ -204,7 +204,7 @@ impl<S: LnbServer> MastodonLnbClientInner<S> {
         Ok(())
     }
 
-    async fn upload_image(&self, url: &Url, description: Option<&str>) -> Result<AttachmentId, WrappedPlatformError> {
+    async fn upload_image(&self, url: &Url, description: Option<&str>) -> Result<AttachmentId, WrappedClientError> {
         // ダウンロード
         let response = self.http_client.get(url.to_string()).send().await?;
         let image_data = response.bytes().await?;

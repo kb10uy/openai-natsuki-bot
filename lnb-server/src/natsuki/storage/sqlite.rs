@@ -1,12 +1,10 @@
-use crate::{
-    error::StorageError,
-    model::{config::AppConfigStorageSqlite, conversation::Conversation},
-    specs::storage::ConversationStorage,
-};
-
 use std::sync::Arc;
 
 use futures::{FutureExt, future::BoxFuture};
+use lnb_core::{
+    config::AppConfigStorageSqlite, error::StorageError, interface::storage::ConversationStorage,
+    model::conversation::Conversation,
+};
 use sqlx::{SqlitePool, prelude::FromRow};
 use uuid::Uuid;
 
