@@ -1,21 +1,12 @@
-mod assistant;
 mod cli;
-mod error;
-mod impls;
-mod model;
-mod specs;
-mod text;
+mod natsuki;
 
-use crate::{
-    assistant::Assistant,
-    impls::{
-        function::{GetIllustUrl, ImageGenerator, LocalInfo, SelfInfo},
-        llm::create_llm,
-        platform::{CliPlatform, DiscordPlatform, MastodonPlatform},
-        storage::create_storage,
-    },
-    model::config::AppConfig,
-    specs::platform::ConversationPlatform,
+use crate::natsuki::{
+    Natsuki,
+    function::{GetIllustUrl, ImageGenerator, LocalInfo, SelfInfo},
+    llm::create_llm,
+    platform::{CliPlatform, DiscordPlatform, MastodonPlatform},
+    storage::create_storage,
 };
 
 use std::path::Path;
@@ -23,11 +14,9 @@ use std::path::Path;
 use anyhow::{Context as _, Result, bail};
 use clap::Parser;
 use futures::future::join_all;
+use lnb_core::config::AppConfig;
 use tokio::{fs::read_to_string, spawn};
 use tracing::info;
-
-/// クライアントに設定する UserAgent。
-pub const USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -41,17 +30,17 @@ async fn main() -> Result<()> {
 
     let llm = create_llm(&config.llm).await?;
     let storage = create_storage(&config.storage).await?;
-    let assistant = Assistant::new(assistant_identity, llm, storage);
+    let natsuki = Natsuki::new(assistant_identity, llm, storage).await?;
 
-    assistant.add_simple_function(SelfInfo::new()).await;
-    assistant.add_simple_function(LocalInfo::new()?).await;
+    natsuki.add_simple_function(SelfInfo::new()).await;
+    natsuki.add_simple_function(LocalInfo::new()?).await;
     if config.tool.image_generator.enabled {
-        assistant
+        natsuki
             .add_simple_function(ImageGenerator::new(&config.tool.image_generator)?)
             .await;
     }
     if config.tool.get_illust_url.enabled {
-        assistant
+        natsuki
             .add_simple_function(GetIllustUrl::new(&config.tool.get_illust_url).await?)
             .await;
     }
@@ -61,7 +50,7 @@ async fn main() -> Result<()> {
     // CLI
     if config.platform.cli.enabled {
         info!("starting CLI platform");
-        let cli_platform = CliPlatform::new(assistant.clone());
+        let cli_platform = CliPlatform::new(natsuki.clone());
         let cli_task = spawn(cli_platform.execute());
         platform_tasks.push(Box::new(cli_task));
     }
@@ -69,7 +58,7 @@ async fn main() -> Result<()> {
     // Mastodon
     if config.platform.mastodon.enabled {
         info!("starting Mastodon platform");
-        let mastodon_platform = MastodonPlatform::new(&config.platform.mastodon, assistant.clone()).await?;
+        let mastodon_platform = MastodonPlatform::new(&config.platform.mastodon, natsuki.clone()).await?;
         let mastodon_task = spawn(mastodon_platform.execute());
         platform_tasks.push(Box::new(mastodon_task));
     }
@@ -77,7 +66,7 @@ async fn main() -> Result<()> {
     // Discord
     if config.platform.discord.enabled {
         info!("starting Discord platform");
-        let discord_platform = DiscordPlatform::new(&config.platform.discord, assistant.clone()).await?;
+        let discord_platform = DiscordPlatform::new(&config.platform.discord, natsuki.clone()).await?;
         let discord_task = spawn(discord_platform.execute());
         platform_tasks.push(Box::new(discord_task));
     }

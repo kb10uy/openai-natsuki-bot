@@ -1,9 +1,8 @@
-use crate::{error::StorageError, model::conversation::Conversation, specs::storage::ConversationStorage};
-
 use std::{collections::HashMap, sync::Arc};
 
 use bimap::BiHashMap;
 use futures::{FutureExt, future::BoxFuture};
+use lnb_core::{error::StorageError, interface::storage::ConversationStorage, model::conversation::Conversation};
 use tokio::sync::Mutex;
 use uuid::Uuid;
 

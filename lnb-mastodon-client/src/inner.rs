@@ -1,77 +1,35 @@
-use crate::{
-    USER_AGENT,
-    assistant::Assistant,
-    error::PlatformError,
+use crate::text::{sanitize_markdown_for_mastodon, sanitize_mention_html_from_mastodon};
+
+use std::sync::Arc;
+
+use futures::prelude::*;
+use lnb_core::{
+    APP_USER_AGENT,
+    config::AppConfigPlatformMastodon,
+    error::ClientError,
+    interface::server::LnbServer,
     model::{
-        config::AppConfigPlatformMastodon,
         conversation::ConversationAttachment,
         message::{UserMessage, UserMessageContent},
     },
-    specs::platform::ConversationPlatform,
-    text::markdown::sanitize_markdown_mastodon,
 };
-
-use std::sync::{Arc, LazyLock};
-
-use futures::{future::BoxFuture, prelude::*};
-use html2md::parse_html;
 use mastodon_async::{
-    Error as MastodonError, Mastodon, NewStatus, Visibility,
+    Mastodon, NewStatus, Visibility,
     entities::{AttachmentId, account::Account, event::Event, notification::Type as NotificationType, status::Status},
-    format_err,
     prelude::MediaType,
 };
-use regex::Regex;
 use reqwest::Client;
 use tempfile::NamedTempFile;
+use thiserror::Error as ThisError;
 use tokio::{fs::File, io::AsyncWriteExt, spawn};
 use tracing::{debug, error, info};
 use url::Url;
 
 const PLATFORM_KEY: &str = "mastodon";
 
-static RE_HEAD_MENTION: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r#"^\s*\[@.+?\]\(.+?\)\s*"#).expect("invalid regex"));
-
 #[derive(Debug)]
-pub struct MastodonPlatform(Arc<MastodonPlatformInner>);
-
-impl MastodonPlatform {
-    pub async fn new(
-        config_mastodon: &AppConfigPlatformMastodon,
-        assistant: Assistant,
-    ) -> Result<MastodonPlatform, PlatformError> {
-        // Mastodon クライアントと自己アカウント情報
-        let http_client = reqwest::ClientBuilder::new().user_agent(USER_AGENT).build()?;
-        let mastodon_data = mastodon_async::Data {
-            base: config_mastodon.server_url.clone().into(),
-            token: config_mastodon.token.clone().into(),
-            ..Default::default()
-        };
-        let mastodon = Mastodon::new(http_client.clone(), mastodon_data);
-        let self_account = mastodon.verify_credentials().await?;
-
-        Ok(MastodonPlatform(Arc::new(MastodonPlatformInner {
-            assistant,
-            http_client,
-            mastodon,
-            self_account,
-            sensitive_spoiler: config_mastodon.sensitive_spoiler.clone(),
-            max_length: config_mastodon.max_length,
-        })))
-    }
-}
-
-impl ConversationPlatform for MastodonPlatform {
-    fn execute(&self) -> BoxFuture<'static, Result<(), PlatformError>> {
-        let cloned_inner = self.0.clone();
-        cloned_inner.execute().boxed()
-    }
-}
-
-#[derive(Debug)]
-struct MastodonPlatformInner {
-    assistant: Assistant,
+pub struct MastodonLnbClientInner<S> {
+    assistant: S,
     http_client: Client,
     mastodon: Mastodon,
     self_account: Account,
@@ -79,14 +37,46 @@ struct MastodonPlatformInner {
     max_length: usize,
 }
 
-impl MastodonPlatformInner {
-    async fn execute(self: Arc<Self>) -> Result<(), PlatformError> {
-        let user_stream = self.mastodon.stream_user().await?;
+impl<S: LnbServer> MastodonLnbClientInner<S> {
+    pub async fn new(
+        config_mastodon: &AppConfigPlatformMastodon,
+        assistant: S,
+    ) -> Result<MastodonLnbClientInner<S>, ClientError> {
+        // Mastodon クライアントと自己アカウント情報
+        let http_client = reqwest::ClientBuilder::new()
+            .user_agent(APP_USER_AGENT)
+            .build()
+            .map_err(ClientError::by_communication)?;
+        let mastodon_data = mastodon_async::Data {
+            base: config_mastodon.server_url.clone().into(),
+            token: config_mastodon.token.clone().into(),
+            ..Default::default()
+        };
+        let mastodon = Mastodon::new(http_client.clone(), mastodon_data);
+        let self_account = mastodon.verify_credentials().map_err(ClientError::by_external).await?;
+
+        Ok(MastodonLnbClientInner {
+            assistant,
+            http_client,
+            mastodon,
+            self_account,
+            sensitive_spoiler: config_mastodon.sensitive_spoiler.clone(),
+            max_length: config_mastodon.max_length,
+        })
+    }
+
+    pub async fn execute(self: Arc<Self>) -> Result<(), ClientError> {
+        let user_stream = self
+            .mastodon
+            .stream_user()
+            .map_err(ClientError::by_communication)
+            .await?;
         user_stream
             .try_for_each(async |(e, _)| {
                 spawn(self.clone().process_event(e));
                 Ok(())
             })
+            .map_err(ClientError::by_communication)
             .await?;
 
         Ok(())
@@ -98,7 +88,7 @@ impl MastodonPlatformInner {
             Event::Notification(notification) => match notification.notification_type {
                 NotificationType::Mention => match notification.status {
                     Some(status) => self.process_status(status).await,
-                    None => Err(PlatformError::ExpectationMismatch("mentioned status not found".into())),
+                    None => Err(ClientError::External(MastodonClientError::InvalidMention.into())),
                 },
                 _ => Ok(()),
             },
@@ -111,7 +101,7 @@ impl MastodonPlatformInner {
         error!("mastodon event process reported error: {err}");
     }
 
-    async fn process_status(&self, status: Status) -> Result<(), PlatformError> {
+    async fn process_status(&self, status: Status) -> Result<(), ClientError> {
         // フィルタリング(bot flag と自分には応答しない)
         if status.account.bot || status.account.id == self.self_account.id {
             return Ok(());
@@ -137,8 +127,7 @@ impl MastodonPlatformInner {
         };
 
         // パース
-        let content_markdown = parse_html(&status.content);
-        let stripped = RE_HEAD_MENTION.replace_all(&content_markdown, "");
+        let sanitized_mention_text = sanitize_mention_html_from_mastodon(&status.content);
         let images: Vec<_> = status
             .media_attachments
             .into_iter()
@@ -149,11 +138,11 @@ impl MastodonPlatformInner {
             "[{}] {}: {:?} ({} image(s))",
             status.id,
             status.account.acct,
-            stripped,
+            sanitized_mention_text,
             images.len()
         );
 
-        let mut contents = vec![UserMessageContent::Text(stripped.to_string())];
+        let mut contents = vec![UserMessageContent::Text(sanitized_mention_text)];
         contents.extend(images);
 
         // Conversation の更新・呼出し
@@ -186,7 +175,7 @@ impl MastodonPlatformInner {
         // リプライ構築
         // 公開範囲は最大 unlisted でリプライ元に合わせる
         // CW はリプライ元があったらそのまま、ないときは要そぎぎなら付与
-        let mut sanitized_text = sanitize_markdown_mastodon(&assistant_message.text);
+        let mut sanitized_text = sanitize_markdown_for_mastodon(&assistant_message.text);
         if sanitized_text.chars().count() > self.max_length {
             sanitized_text = sanitized_text.chars().take(self.max_length).collect();
             sanitized_text.push_str("...(omitted)");
@@ -208,7 +197,11 @@ impl MastodonPlatformInner {
             media_ids: Some(attachment_ids),
             ..Default::default()
         };
-        let replied_status = self.mastodon.new_status(reply_status).await?;
+        let replied_status = self
+            .mastodon
+            .new_status(reply_status)
+            .map_err(ClientError::by_external)
+            .await?;
 
         // Conversation/history の更新
         let updated_conversation = conversation_update.finish();
@@ -220,20 +213,30 @@ impl MastodonPlatformInner {
         Ok(())
     }
 
-    async fn upload_image(&self, url: &Url, description: Option<&str>) -> Result<AttachmentId, PlatformError> {
+    async fn upload_image(&self, url: &Url, description: Option<&str>) -> Result<AttachmentId, ClientError> {
         // ダウンロード
-        let response = self.http_client.get(url.to_string()).send().await?;
-        let image_data = response.bytes().await?;
+        let response = self
+            .http_client
+            .get(url.to_string())
+            .send()
+            .map_err(ClientError::by_external)
+            .await?;
+        let image_data = response.bytes().map_err(ClientError::by_external).await?;
         let mime_type = infer::get(&image_data).map(|ft| ft.mime_type());
 
         // tempfile に書き出し
         let tempfile = match mime_type {
-            Some("image/jpeg") => NamedTempFile::with_suffix(".jpg")?,
-            Some("image/png") => NamedTempFile::with_suffix(".png")?,
-            Some("image/gif") => NamedTempFile::with_suffix(".gif")?,
-            _ => {
-                return Err(PlatformError::Communication(
-                    format_err!("unsupported image type: {mime_type:?}").into(),
+            Some("image/jpeg") => NamedTempFile::with_suffix(".jpg").map_err(ClientError::by_external)?,
+            Some("image/png") => NamedTempFile::with_suffix(".png").map_err(ClientError::by_external)?,
+            Some("image/gif") => NamedTempFile::with_suffix(".gif").map_err(ClientError::by_external)?,
+            Some(otherwise) => {
+                return Err(ClientError::External(
+                    MastodonClientError::UnsupportedImageType(otherwise.to_string()).into(),
+                ));
+            }
+            None => {
+                return Err(ClientError::External(
+                    MastodonClientError::UnsupportedImageType("(unknown)".into()).into(),
                 ));
             }
         };
@@ -242,7 +245,10 @@ impl MastodonPlatformInner {
         let restored_tempfile = {
             let (temp_file, temp_path) = tempfile.into_parts();
             let mut async_file = File::from_std(temp_file);
-            async_file.write_all(&image_data).await?;
+            async_file
+                .write_all(&image_data)
+                .await
+                .map_err(ClientError::by_external)?;
             let restored_file = async_file.into_std().await;
             NamedTempFile::from_parts(restored_file, temp_path)
         };
@@ -250,6 +256,7 @@ impl MastodonPlatformInner {
         let uploaded_attachment = self
             .mastodon
             .media(restored_tempfile.path(), description.map(|d| d.to_string()))
+            .map_err(ClientError::by_external)
             .await?;
         // ここまで生き残らせる
         drop(restored_tempfile);
@@ -258,8 +265,11 @@ impl MastodonPlatformInner {
     }
 }
 
-impl From<MastodonError> for PlatformError {
-    fn from(value: MastodonError) -> Self {
-        PlatformError::External(value.into())
-    }
+#[derive(Debug, ThisError)]
+pub enum MastodonClientError {
+    #[error("invalid mention object")]
+    InvalidMention,
+
+    #[error("unsupported image type: {0}")]
+    UnsupportedImageType(String),
 }
