@@ -1401,6 +1401,7 @@ dependencies = [
  "lnb-core",
  "markdown",
  "mastodon-async",
+ "mastodon-async-entities",
  "regex",
  "reqwest 0.12.15",
  "tempfile",
