@@ -2,24 +2,27 @@ use std::error::Error as StdError;
 
 use thiserror::Error as ThisError;
 
+/// LnbClient のエラー。
 #[derive(Debug, ThisError)]
-pub enum PlatformError {
-    /// Assistant からのエラー。
+pub enum ClientError {
+    /// Server からのエラー。
     #[error("assistant error: {0}")]
-    Assistant(
+    Server(
         #[source]
         #[from]
         ServerError,
     ),
 
+    /// 通信関連のエラー。
     #[error("communication failed: {0}")]
     Communication(#[source] Box<dyn StdError + Send + Sync + 'static>),
 
+    /// 外部 API などのエラー。
     #[error("external error: {0}")]
     External(#[source] Box<dyn StdError + Send + Sync + 'static>),
 }
 
-/// Assistant 層のエラー。
+/// LnbServer のエラー。
 #[derive(Debug, ThisError)]
 pub enum ServerError {
     #[error("LLM error: {0}")]

@@ -9,7 +9,7 @@ use futures::prelude::*;
 use lnb_core::{
     APP_USER_AGENT,
     config::AppConfigPlatformMastodon,
-    error::PlatformError,
+    error::ClientError,
     interface::server::LnbServer,
     model::{
         conversation::ConversationAttachment,
@@ -92,7 +92,7 @@ impl<S: LnbServer> MastodonPlatformInner<S> {
         let Err(err) = processed else {
             return;
         };
-        let err: PlatformError = err.into();
+        let err: ClientError = err.into();
         error!("mastodon event process reported error: {err}");
     }
 

@@ -9,7 +9,7 @@ use std::sync::Arc;
 use futures::{future::BoxFuture, prelude::*};
 use lnb_core::{
     config::AppConfigPlatformMastodon,
-    error::PlatformError,
+    error::ClientError,
     interface::{client::LnbClient, server::LnbServer},
 };
 
@@ -20,7 +20,7 @@ impl<S: LnbServer> MastodonPlatform<S> {
     pub async fn new(
         config_mastodon: &AppConfigPlatformMastodon,
         assistant: S,
-    ) -> Result<MastodonPlatform<S>, PlatformError> {
+    ) -> Result<MastodonPlatform<S>, ClientError> {
         let inner = match MastodonPlatformInner::new(config_mastodon, assistant).await {
             Ok(i) => i,
             Err(e) => return Err(e.into()),
@@ -30,7 +30,7 @@ impl<S: LnbServer> MastodonPlatform<S> {
 }
 
 impl<S: LnbServer> LnbClient for MastodonPlatform<S> {
-    fn execute(&self) -> BoxFuture<'static, Result<(), PlatformError>> {
+    fn execute(&self) -> BoxFuture<'static, Result<(), ClientError>> {
         let cloned_inner = self.0.clone();
         async {
             cloned_inner.execute().await?;

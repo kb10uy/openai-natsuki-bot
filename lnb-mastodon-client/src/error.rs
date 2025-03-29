@@ -1,45 +1,45 @@
 use std::io::Error as IoError;
 
-use lnb_core::error::{PlatformError, ServerError};
+use lnb_core::error::{ClientError, ServerError};
 use mastodon_async::Error as MastodonError;
 use reqwest::Error as ReqwestError;
 use thiserror::Error as ThisError;
 
-pub struct WrappedPlatformError(PlatformError);
+pub struct WrappedPlatformError(ClientError);
 
-impl From<WrappedPlatformError> for PlatformError {
+impl From<WrappedPlatformError> for ClientError {
     fn from(value: WrappedPlatformError) -> Self {
         value.0
     }
 }
 
-impl From<PlatformError> for WrappedPlatformError {
-    fn from(value: PlatformError) -> Self {
+impl From<ClientError> for WrappedPlatformError {
+    fn from(value: ClientError) -> Self {
         Self(value)
     }
 }
 
 impl From<ServerError> for WrappedPlatformError {
     fn from(value: ServerError) -> Self {
-        Self(PlatformError::Assistant(value))
+        Self(ClientError::Server(value))
     }
 }
 
 impl From<ReqwestError> for WrappedPlatformError {
     fn from(value: ReqwestError) -> Self {
-        Self(PlatformError::Communication(value.into()))
+        Self(ClientError::Communication(value.into()))
     }
 }
 
 impl From<MastodonError> for WrappedPlatformError {
     fn from(value: MastodonError) -> Self {
-        Self(PlatformError::External(value.into()))
+        Self(ClientError::External(value.into()))
     }
 }
 
 impl From<IoError> for WrappedPlatformError {
     fn from(value: IoError) -> Self {
-        Self(PlatformError::External(value.into()))
+        Self(ClientError::External(value.into()))
     }
 }
 
@@ -54,6 +54,6 @@ pub enum MastodonClientError {
 
 impl From<MastodonClientError> for WrappedPlatformError {
     fn from(value: MastodonClientError) -> Self {
-        Self(PlatformError::External(value.into()))
+        Self(ClientError::External(value.into()))
     }
 }
