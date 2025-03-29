@@ -1,4 +1,3 @@
-mod error;
 mod inner;
 mod text;
 
@@ -21,10 +20,7 @@ impl<S: LnbServer> MastodonLnbClient<S> {
         config_mastodon: &AppConfigPlatformMastodon,
         assistant: S,
     ) -> Result<MastodonLnbClient<S>, ClientError> {
-        let inner = match MastodonLnbClientInner::new(config_mastodon, assistant).await {
-            Ok(i) => i,
-            Err(e) => return Err(e.into()),
-        };
+        let inner = MastodonLnbClientInner::new(config_mastodon, assistant).await?;
         Ok(MastodonLnbClient(Arc::new(inner)))
     }
 }

@@ -1,7 +1,4 @@
-use crate::{
-    error::{MastodonClientError, WrappedClientError},
-    text::{sanitize_markdown_for_mastodon, sanitize_mention_html_from_mastodon},
-};
+use crate::text::{sanitize_markdown_for_mastodon, sanitize_mention_html_from_mastodon};
 
 use std::sync::Arc;
 
@@ -23,6 +20,7 @@ use mastodon_async::{
 };
 use reqwest::Client;
 use tempfile::NamedTempFile;
+use thiserror::Error as ThisError;
 use tokio::{fs::File, io::AsyncWriteExt, spawn};
 use tracing::{debug, error, info};
 use url::Url;
@@ -43,16 +41,19 @@ impl<S: LnbServer> MastodonLnbClientInner<S> {
     pub async fn new(
         config_mastodon: &AppConfigPlatformMastodon,
         assistant: S,
-    ) -> Result<MastodonLnbClientInner<S>, WrappedClientError> {
+    ) -> Result<MastodonLnbClientInner<S>, ClientError> {
         // Mastodon クライアントと自己アカウント情報
-        let http_client = reqwest::ClientBuilder::new().user_agent(APP_USER_AGENT).build()?;
+        let http_client = reqwest::ClientBuilder::new()
+            .user_agent(APP_USER_AGENT)
+            .build()
+            .map_err(ClientError::by_communication)?;
         let mastodon_data = mastodon_async::Data {
             base: config_mastodon.server_url.clone().into(),
             token: config_mastodon.token.clone().into(),
             ..Default::default()
         };
         let mastodon = Mastodon::new(http_client.clone(), mastodon_data);
-        let self_account = mastodon.verify_credentials().await?;
+        let self_account = mastodon.verify_credentials().map_err(ClientError::by_external).await?;
 
         Ok(MastodonLnbClientInner {
             assistant,
@@ -64,13 +65,18 @@ impl<S: LnbServer> MastodonLnbClientInner<S> {
         })
     }
 
-    pub async fn execute(self: Arc<Self>) -> Result<(), WrappedClientError> {
-        let user_stream = self.mastodon.stream_user().await?;
+    pub async fn execute(self: Arc<Self>) -> Result<(), ClientError> {
+        let user_stream = self
+            .mastodon
+            .stream_user()
+            .map_err(ClientError::by_communication)
+            .await?;
         user_stream
             .try_for_each(async |(e, _)| {
                 spawn(self.clone().process_event(e));
                 Ok(())
             })
+            .map_err(ClientError::by_communication)
             .await?;
 
         Ok(())
@@ -82,7 +88,7 @@ impl<S: LnbServer> MastodonLnbClientInner<S> {
             Event::Notification(notification) => match notification.notification_type {
                 NotificationType::Mention => match notification.status {
                     Some(status) => self.process_status(status).await,
-                    None => Err(MastodonClientError::InvalidMention.into()),
+                    None => Err(ClientError::External(MastodonClientError::InvalidMention.into())),
                 },
                 _ => Ok(()),
             },
@@ -92,11 +98,10 @@ impl<S: LnbServer> MastodonLnbClientInner<S> {
         let Err(err) = processed else {
             return;
         };
-        let err: ClientError = err.into();
         error!("mastodon event process reported error: {err}");
     }
 
-    async fn process_status(&self, status: Status) -> Result<(), WrappedClientError> {
+    async fn process_status(&self, status: Status) -> Result<(), ClientError> {
         // フィルタリング(bot flag と自分には応答しない)
         if status.account.bot || status.account.id == self.self_account.id {
             return Ok(());
@@ -192,7 +197,11 @@ impl<S: LnbServer> MastodonLnbClientInner<S> {
             media_ids: Some(attachment_ids),
             ..Default::default()
         };
-        let replied_status = self.mastodon.new_status(reply_status).await?;
+        let replied_status = self
+            .mastodon
+            .new_status(reply_status)
+            .map_err(ClientError::by_external)
+            .await?;
 
         // Conversation/history の更新
         let updated_conversation = conversation_update.finish();
@@ -204,26 +213,42 @@ impl<S: LnbServer> MastodonLnbClientInner<S> {
         Ok(())
     }
 
-    async fn upload_image(&self, url: &Url, description: Option<&str>) -> Result<AttachmentId, WrappedClientError> {
+    async fn upload_image(&self, url: &Url, description: Option<&str>) -> Result<AttachmentId, ClientError> {
         // ダウンロード
-        let response = self.http_client.get(url.to_string()).send().await?;
-        let image_data = response.bytes().await?;
+        let response = self
+            .http_client
+            .get(url.to_string())
+            .send()
+            .map_err(ClientError::by_external)
+            .await?;
+        let image_data = response.bytes().map_err(ClientError::by_external).await?;
         let mime_type = infer::get(&image_data).map(|ft| ft.mime_type());
 
         // tempfile に書き出し
         let tempfile = match mime_type {
-            Some("image/jpeg") => NamedTempFile::with_suffix(".jpg")?,
-            Some("image/png") => NamedTempFile::with_suffix(".png")?,
-            Some("image/gif") => NamedTempFile::with_suffix(".gif")?,
-            Some(otherwise) => return Err(MastodonClientError::UnsupportedImageType(otherwise.to_string()).into()),
-            None => return Err(MastodonClientError::UnsupportedImageType("(unknown)".into()).into()),
+            Some("image/jpeg") => NamedTempFile::with_suffix(".jpg").map_err(ClientError::by_external)?,
+            Some("image/png") => NamedTempFile::with_suffix(".png").map_err(ClientError::by_external)?,
+            Some("image/gif") => NamedTempFile::with_suffix(".gif").map_err(ClientError::by_external)?,
+            Some(otherwise) => {
+                return Err(ClientError::External(
+                    MastodonClientError::UnsupportedImageType(otherwise.to_string()).into(),
+                ));
+            }
+            None => {
+                return Err(ClientError::External(
+                    MastodonClientError::UnsupportedImageType("(unknown)".into()).into(),
+                ));
+            }
         };
         debug!("writing temporary image at {:?}", tempfile.path());
         // tokio File にするので分解する
         let restored_tempfile = {
             let (temp_file, temp_path) = tempfile.into_parts();
             let mut async_file = File::from_std(temp_file);
-            async_file.write_all(&image_data).await?;
+            async_file
+                .write_all(&image_data)
+                .await
+                .map_err(ClientError::by_external)?;
             let restored_file = async_file.into_std().await;
             NamedTempFile::from_parts(restored_file, temp_path)
         };
@@ -231,10 +256,20 @@ impl<S: LnbServer> MastodonLnbClientInner<S> {
         let uploaded_attachment = self
             .mastodon
             .media(restored_tempfile.path(), description.map(|d| d.to_string()))
+            .map_err(ClientError::by_external)
             .await?;
         // ここまで生き残らせる
         drop(restored_tempfile);
 
         Ok(uploaded_attachment.id)
     }
+}
+
+#[derive(Debug, ThisError)]
+pub enum MastodonClientError {
+    #[error("invalid mention object")]
+    InvalidMention,
+
+    #[error("unsupported image type: {0}")]
+    UnsupportedImageType(String),
 }
