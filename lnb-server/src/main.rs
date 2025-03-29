@@ -1,9 +1,6 @@
 mod assistant;
 mod cli;
-mod error;
 mod impls;
-mod model;
-mod specs;
 mod text;
 
 use crate::{
@@ -25,9 +22,6 @@ use clap::Parser;
 use futures::future::join_all;
 use tokio::{fs::read_to_string, spawn};
 use tracing::info;
-
-/// クライアントに設定する UserAgent。
-pub const USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
 
 #[tokio::main]
 async fn main() -> Result<()> {
