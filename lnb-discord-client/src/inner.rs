@@ -1,4 +1,6 @@
-use futures::{FutureExt, future::BoxFuture};
+use crate::text::{sanitize_discord_message, sanitize_markdown_for_discord};
+
+use futures::{FutureExt, TryFutureExt, future::BoxFuture};
 use lnb_core::{
     config::AppConfigPlatformDiscord,
     error::ClientError,
@@ -11,11 +13,6 @@ use serenity::{
 };
 use tokio::sync::RwLock;
 use tracing::{error, info};
-
-use crate::{
-    error::WrappedClientError,
-    text::{sanitize_discord_message, sanitize_markdown_for_discord},
-};
 
 const PLATFORM_KEY: &str = "discord";
 
@@ -48,7 +45,7 @@ impl<S: LnbServer> DiscordLnbClientInner<S> {
     pub async fn new_as_serenity_client(
         config_discord: &AppConfigPlatformDiscord,
         assistant: S,
-    ) -> Result<SerenityClient, WrappedClientError> {
+    ) -> Result<SerenityClient, ClientError> {
         let inner = DiscordLnbClientInner {
             bot_user: RwLock::new(None),
             max_length: config_discord.max_length,
@@ -58,11 +55,12 @@ impl<S: LnbServer> DiscordLnbClientInner<S> {
         let intents = GatewayIntents::GUILDS | GatewayIntents::GUILD_MESSAGES | GatewayIntents::MESSAGE_CONTENT;
         let discord = SerenityClient::builder(&config_discord.token, intents)
             .event_handler(inner)
-            .await?;
+            .await
+            .map_err(ClientError::by_external)?;
         Ok(discord)
     }
 
-    async fn on_ready(&self, _ctx: Context, ready: Ready) -> Result<(), WrappedClientError> {
+    async fn on_ready(&self, _ctx: Context, ready: Ready) -> Result<(), ClientError> {
         info!("Discord platform got ready: [{}] {}", ready.user.id, ready.user.name);
 
         let mut bot_user = self.bot_user.write().await;
@@ -70,7 +68,7 @@ impl<S: LnbServer> DiscordLnbClientInner<S> {
         Ok(())
     }
 
-    async fn on_message(&self, ctx: Context, message: SerenityMessage) -> Result<(), WrappedClientError> {
+    async fn on_message(&self, ctx: Context, message: SerenityMessage) -> Result<(), ClientError> {
         let bot_user = self.bot_user.read().await;
         let Some(bot_user) = bot_user.as_ref() else {
             return Ok(());
@@ -85,7 +83,7 @@ impl<S: LnbServer> DiscordLnbClientInner<S> {
         Ok(())
     }
 
-    async fn on_mentioned_message(&self, ctx: Context, message: SerenityMessage) -> Result<(), WrappedClientError> {
+    async fn on_mentioned_message(&self, ctx: Context, message: SerenityMessage) -> Result<(), ClientError> {
         // Conversation の検索
         let context_key = message.referenced_message.as_ref().map(|rm| rm.id.to_string());
         let conversation = match context_key {
@@ -143,6 +141,7 @@ impl<S: LnbServer> DiscordLnbClientInner<S> {
                 &ctx.http,
                 CreateMessage::new().reference_message(&message).content(sanitized_text),
             )
+            .map_err(ClientError::by_external)
             .await?;
 
         // Conversation/history の更新
@@ -156,12 +155,11 @@ impl<S: LnbServer> DiscordLnbClientInner<S> {
     }
 }
 
-fn do_event<'t>(event_future: impl Future<Output = Result<(), WrappedClientError>> + Send + 't) -> BoxFuture<'t, ()> {
+fn do_event<'t>(event_future: impl Future<Output = Result<(), ClientError>> + Send + 't) -> BoxFuture<'t, ()> {
     async {
         match event_future.await {
             Ok(()) => (),
             Err(err) => {
-                let err: ClientError = err.into();
                 error!("Discord event process reported error: {err}");
             }
         }

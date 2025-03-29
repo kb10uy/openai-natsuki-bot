@@ -1,4 +1,3 @@
-mod error;
 mod inner;
 mod text;
 
@@ -22,10 +21,7 @@ impl DiscordLnbClient {
         config_discord: &AppConfigPlatformDiscord,
         assistant: impl LnbServer,
     ) -> Result<DiscordLnbClient, ClientError> {
-        let inner_discord = match DiscordLnbClientInner::new_as_serenity_client(config_discord, assistant).await {
-            Ok(i) => i,
-            Err(err) => return Err(err.into()),
-        };
+        let inner_discord = DiscordLnbClientInner::new_as_serenity_client(config_discord, assistant).await?;
         Ok(DiscordLnbClient(Arc::new(Mutex::new(inner_discord))))
     }
 }
